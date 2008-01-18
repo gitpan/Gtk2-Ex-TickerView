@@ -1,0 +1,34 @@
+Copyright 2008 Kevin Ryde
+
+This file is part of Gtk2-Ex-TickerView.
+
+Gtk2-Ex-TickerView is free software; you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the Free
+Software Foundation; either version 3, or (at your option) any later
+version.
+
+Gtk2-Ex-TickerView is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+for more details.
+
+You should have received a copy of the GNU General Public License along
+with Gtk2-Ex-TickerView.  If not, see <http://www.gnu.org/licenses/>.
+
+
+
+
+Gtk2::Ex::TickerView is a horizontal scrolling stock ticker or newsbar
+using the Gtk model/view style of Gtk2::TreeView.  You supply data in
+a model (such as Gtk2::ListStore, or your own custom model) and
+TickerView displays the items scrolling across the screen.
+
+CellRenderers are used to draw allowing lots of styles or custom
+drawing.  Left-to-right and right-to-left display and scrolling are
+both supported.
+
+The only prerequisite is Gtk2-Perl.  The TickerView home page is
+
+    http://www.geocities.com/user42_kevin/gtk2-ex-tickerview/index.html
+
+Bug reports to the author at user42@zip.com.au please.

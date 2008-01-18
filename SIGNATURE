@@ -1,0 +1,39 @@
+This file contains message digests of all files listed in MANIFEST,
+signed via the Module::Signature module, version 0.55.
+
+To verify the content in this distribution, first make sure you have
+Module::Signature installed, then type:
+
+    % cpansign -v
+
+It will check each file's integrity, as well as the signature's
+validity.  If "==> Signature verified OK! <==" is not displayed,
+the distribution may already have been compromised, and you should
+not run its Makefile.PL or Build.PL.
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+SHA1 c3c93954b2fc8bb52ff9d20087e93cc3eae46a2e MANIFEST
+SHA1 0468130322306698b5fc09659654fd8867db6647 META.yml
+SHA1 bbc593623962726df0a5fc4779c7a96f94521cc7 Makefile.PL
+SHA1 82e681f503e0c90a046e4d446dbb5e4425b5206c README
+SHA1 cae1677e0a12f90a9843846d3655ccb30b65ee5d debian/changelog
+SHA1 1b6453892473a467d07372d45eb05abc2031647a debian/compat
+SHA1 61a08299fdfb7a9cfd491149820b2c7eb9aa4218 debian/control
+SHA1 03bbd5a133c50f443068a17178445dfcb2b5718e debian/copyright
+SHA1 a3417fc54bf50681d6a102286d8cfb3c7df25998 debian/rules
+SHA1 09c0b9910b76c876570412c19e14ebb00c008467 debian/watch
+SHA1 9d35809d7cbed1c12fd043e3313dce9889b1f32e devel/ticker-cells.pl
+SHA1 c184946b62fe32e952976fec562b966812958d5e examples/news.pl
+SHA1 c59178be3b63f598da0ea2cd0ef45f3eaa982b23 examples/simple.pl
+SHA1 69ca539727fe4826ebd3249b5d6569540e26bdee lib/Gtk2/Ex/TickerView.pm
+SHA1 f0ed790bf6e2f954ce02a12d2c1016fccf280354 t/TickerView.t
+SHA1 a661a39e55a4127aecb1b97a631c4f01f7dce8c6 t/pod.t
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.6 (GNU/Linux)
+
+iD8DBQFHj/OtLFMCIV9q3ToRAioAAKCdi2kmc2ykeF34j843Sg9YhP373ACfVwyI
+er084s2tDHxmQpVScNwj5Fo=
+=elfF
+-----END PGP SIGNATURE-----

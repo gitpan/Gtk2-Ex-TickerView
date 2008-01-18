@@ -1,0 +1,16 @@
+Source: libgtk2-ex-tickerview-perl
+Section: perl
+Priority: optional
+Build-Depends: cdbs, debhelper (>= 4)
+Maintainer: Kevin Ryde <user42@zip.com.au>
+Standards-Version: 3.7.3
+Homepage: http://www.geocities.com/user42_kevin/gtk2-ex-tickerview/index.html
+Bugs: mailto:user42@zip.com.au
+
+Package: libgtk2-ex-tickerview-perl
+Architecture: all
+Depends: libgtk2-perl
+Description: Scrolling ticker or newsbar widget for Gtk2-Perl
+ Gtk2::Ex::TickerView displays TreeModel items scrolling horizontally
+ like a stock ticker or newsbar.  Drawing is done with CellRenderers,
+ and can be customized accordingly.
