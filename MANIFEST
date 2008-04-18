@@ -1,3 +1,4 @@
+Changes
 debian/changelog
 debian/compat
 debian/control
@@ -6,6 +7,7 @@ debian/rules
 debian/watch
 devel/ticker-cells.pl
 examples/news.pl
+examples/order.pl
 examples/simple.pl
 lib/Gtk2/Ex/TickerView.pm
 Makefile.PL

@@ -80,6 +80,7 @@ foreach my $str ('News time 12:34:56',
                  'Barbers Union boycotts fringe festival',
                  'Scientists say space is big - really, really, big',
                  'Colonel Kurtz denies his methods are unsound',
+                 'Norville Barnes appointed president of Hudsucker Industries',
                 ) {
   $liststore->set_value ($liststore->append, 0, $str);
 }
@@ -103,6 +104,20 @@ sub timer_callback {
 }
 timer_callback();                            # initial time display
 Glib::Timeout->add (1000, \&timer_callback); # periodic updates
+
+# setup a couple of key bindings, space to toggle the run, Q to quit
+$ticker->add_events (['key-press-mask']);
+$ticker->set_flags ('can-focus');
+$ticker->signal_connect
+  (key_press_event => sub {
+     my ($ticker, $event) = @_;
+     my $keyval = Gtk2::Gdk->keyval_to_upper ($event->keyval);
+     if ($keyval == Gtk2::Gdk->keyval_from_name ('space')) {
+       $ticker->set (run => ! $ticker->get('run'));
+     } elsif ($keyval == Gtk2::Gdk->keyval_from_name ('Q')) {
+       $toplevel->destroy;
+     }
+   });
 
 $toplevel->show_all;
 Gtk2->main;

@@ -76,26 +76,26 @@ my $ticker = Gtk2::Ex::TickerView->new (model => $model,
                                        );
 $ticker->pack_start ($renderer, 1);
 $ticker->set_attributes ($renderer, text => 0);
-print "ticker flags: ", $ticker->flags,"\n";
+print "ticker initial flags: ", $ticker->flags,"\n";
 
 $ticker->signal_connect (direction_changed => sub {
                            print "ticker direction changed\n";
                          });
 
 if (1) {
-  my $cell = Gtk2::CellRendererText->new;
-  $ticker->pack_start ($cell, 1);
-  $ticker->set_attributes ($cell, markup => 0);
+  my $renderer = Gtk2::CellRendererText->new;
+  $ticker->pack_start ($renderer, 1);
+  $ticker->set_attributes ($renderer, markup => 0);
 }
 if (0) {
-  my $cell = Gtk2::CellRendererText->new;
-  $cell->set (text => 'VIS');
-  $ticker->pack_start ($cell, 1);
+  my $renderer = Gtk2::CellRendererText->new;
+  $renderer->set (text => 'VIS');
+  $ticker->pack_start ($renderer, 1);
   $ticker->set_cell_data_func
-    ($cell, sub {
-       my ($ticker, $cell, $model, $iter, $userdata) = @_;
+    ($renderer, sub {
+       my ($ticker, $renderer, $model, $iter, $userdata) = @_;
        my $len = length ($model->get ($iter, 0));
-       $cell->set('visible', $len != 5);
+       $renderer->set('visible', $len != 5);
      });
 }
 $ticker->signal_connect (destroy => sub {
@@ -136,10 +136,28 @@ if (0) {
   $left_vbox->pack_start ($button, 0, 0, 0);
 }
 {
-  my $button = Gtk2::CheckButton->new_with_label ('Sens');
-  $button->set_active (1);
+  my $button = Gtk2::CheckButton->new_with_label ('Sensitive');
+  $button->set_active ($ticker->get('sensitive'));
   $button->signal_connect (toggled => sub {
                              $ticker->set_sensitive ($button->get_active);
+                           });
+  $left_vbox->pack_start ($button, 0, 0, 0);
+}
+{
+  my $button = Gtk2::CheckButton->new_with_label ('Fixed Height');
+  $button->set_active ($ticker->get('fixed-height-mode'));
+  $button->signal_connect (toggled => sub {
+                             $ticker->set (fixed_height_mode
+                                           => $button->get_active);
+                           });
+  $left_vbox->pack_start ($button, 0, 0, 0);
+}
+{
+  my $button = Gtk2::CheckButton->new_with_label ('Model');
+  $button->set_active ($ticker->get('model'));
+  $button->signal_connect (toggled => sub {
+                             $ticker->set (model => ($button->get_active
+                                                     ? $model : undef));
                            });
   $left_vbox->pack_start ($button, 0, 0, 0);
 }

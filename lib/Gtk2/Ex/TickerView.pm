@@ -13,43 +13,45 @@
 # for more details.
 #
 # You should have received a copy of the GNU General Public License along
-# with this program.  If not, see <http://www.gnu.org/licenses/>.
+# with Gtk2-Ex-TickerView.  If not, see <http://www.gnu.org/licenses/>.
 
 package Gtk2::Ex::TickerView;
 use strict;
 use warnings;
 use Carp;
 use Glib;
-use Gtk2;
+use Gtk2 1.180;  # 1.180 for Gtk2::CellLayout interface
 use List::Util qw(min max);
 use POSIX qw(FLT_MAX);
+use base 'Gtk2::Ex::CellLayout::Base';
 
-our $VERSION = 1;
+our $VERSION = 2;
+
+# set this to 1 for some diagnostic prints, or 2 for even more prints
+use constant DEBUG => 0;
 
 use constant {
   DEFAULT_FRAME_RATE => 4,     # times per second
   DEFAULT_SPEED      => 30,    # pixels per second
 };
 
-# not wrapped in gtk2-perl version 1.161
+# not wrapped as of gtk2-perl version 1.181
 use constant GTK_PRIORITY_REDRAW => (Glib::G_PRIORITY_HIGH_IDLE + 20);
-
-# set this to 1 for some diagnostic prints, or 2 for even more prints
-use constant DEBUG => 0;
 
 use Glib::Object::Subclass
   Gtk2::DrawingArea::,
-  signals => { expose_event            => \&do_expose_event,
-               no_expose_event         => \&do_no_expose_event,
-               size_request            => \&do_size_request,
-               button_press_event      => \&do_button_press_event,
-               motion_notify_event     => \&do_motion_notify_event,
-               button_release_event    => \&do_button_release_event,
-               visibility_notify_event => \&do_visibility_notify_event,
-               direction_changed       => \&do_direction_changed,
-               map                     => \&do_map,
-               unmap                   => \&do_unmap,
-               unrealize               => \&do_unrealize,
+  interfaces => [ 'Gtk2::CellLayout' ],
+  signals => { expose_event            => \&_do_expose_event,
+               no_expose_event         => \&_do_no_expose_event,
+               size_request            => \&_do_size_request,
+               button_press_event      => \&_do_button_press_event,
+               motion_notify_event     => \&_do_motion_notify_event,
+               button_release_event    => \&_do_button_release_event,
+               visibility_notify_event => \&_do_visibility_notify_event,
+               direction_changed       => \&_do_direction_changed,
+               map                     => \&_do_map,
+               unmap                   => \&_do_unmap,
+               unrealize               => \&_do_unrealize,
              },
   properties => [Glib::ParamSpec->object
                  ('model',
@@ -122,154 +124,27 @@ sub _rect_intersect_region {
 }
 
 #------------------------------------------------------------------------------
-# CellLayout-compatible interface
-
-sub _find_cellinfo {
-  my ($self, $cell) = @_;
-  $self->{'cellinfo_list'} ||= [];
-  return List::Util::first {$_->{'cell'} == $cell} @{$self->{'cellinfo_list'}};
-}
-
-sub _get_cellinfo {
-  my ($self, $cell) = @_;
-  return (_find_cellinfo ($self, $cell)
-          || croak "no such CellRenderer packed into this TickerView");
-}
-
-sub _cellinfo_setup {
-  my ($self, $cellinfo, $model, $iter) = @_;
-  my $cell = $cellinfo->{'cell'};
-
-  if (my $func = $cellinfo->{'data_func'}) {
-    &$func ($self, $cell, $model, $iter, $cellinfo->{'data_func_data'});
-  } else {
-    my $ahash = $cellinfo->{'attributes'} || {};
-    if (%$ahash) {
-      $cell->set (map {($_, $model->get_value ($iter, $ahash->{$_}))}
-                  keys %$ahash);
-    }
-  }
-  return $cell;
-}
-
-# gtk_cell_layout_add_attribute
-sub add_attribute {
-  my ($self, $cell, $attribute, $column) = @_;
-  my $cellinfo = _get_cellinfo ($self, $cell);
-  $cellinfo->{'attributes'}->{$attribute} = $column;
-  $self->queue_resize;
-  $self->queue_draw;
-}
-
-# gtk_cell_layout_set_attributes
-sub set_attributes {
-  my ($self, $cell, %ahash) = @_;
-  my $cellinfoinfo = _get_cellinfo ($self, $cell);
-  $cellinfoinfo->{'attributes'} = \%ahash;
-  $self->queue_resize;
-  $self->queue_draw;
-}
-
-# gtk_cell_layout_set_cell_data_func
-sub set_cell_data_func {
-  my ($self, $cell, $func, $funcdata) = @_;
-  my $cellinfo = _get_cellinfo ($self, $cell);
-  $cellinfo->{'data_func'} = $func;
-  $cellinfo->{'data_func_data'} = $funcdata;
-  $self->queue_resize;
-  $self->queue_draw;
-}
-
-# gtk_cell_layout_get_cells
-sub get_cells {
-  my ($self) = @_;
-  return map {$_->{'cell'}} @{$self->{'cellinfo_list'}};
-}
-
-# gtk_cell_layout_clear
-sub clear {
-  my ($self) = @_;
-  $self->{'cellinfo_list'} = [];
-  _update_timer ($self);
-  $self->queue_resize;
-  $self->queue_draw;
-}
-
-# gtk_cell_layout_clear_attributes
-sub clear_attributes {
-  my ($self, $cell) = @_;
-  my $cellinfo =  _get_cellinfo ($self, $cell);
-  $cellinfo->{'attributes'} = {};
-  $self->queue_resize;
-  $self->queue_draw;
-}
-
-# gtk_cell_layout_pack_start
-sub pack_start {
-  my ($self, $cell, $expand) = @_;
-  if (_find_cellinfo ($self, $cell)) {
-    croak "this CellRenderer already packed into this TickerView";
-  }
-  push @{$self->{'cellinfo_list'}}, { cell => $cell };
-  _update_timer ($self);
-  $self->queue_resize;
-  $self->queue_draw;
-}
-
-# gtk_cell_layout_pack_end
-sub pack_end {
-  my ($self, $cell, $expand) = @_;
-  if (_find_cellinfo ($self, $cell)) {
-    croak "this CellRenderer already packed into this TickerView";
-  }
-  unshift @{$self->{'cell_list'}}, { cell => $cell };
-  _update_timer ($self);
-  $self->queue_resize;
-  $self->queue_draw;
-}
-
-# gtk_cell_layout_reorder
-sub reorder {
-  my ($self, $cell, $position) = @_;
-  my $cellinfo_list = $self->{'cellinfo_list'};
-  foreach my $i (0 .. $#$cellinfo_list) {
-    if ($cellinfo_list->[$i]->{'cell'} == $cell) {
-      if ($i == $position) {
-        # already in the right position, do nothing
-        return;
-      }      
-      my $cellinfo = splice @$cellinfo_list, $i, 1;
-      splice @$cellinfo_list, $position, 1, $cellinfo;
-      $self->queue_draw;
-      return;
-    }
-  }
-  croak "cell renderer not in this layout";
-}
-
-#------------------------------------------------------------------------------
 
 # 'size_request' class closure
-sub do_size_request {
+sub _do_size_request {
   my ($self, $req) = @_;
-  if (DEBUG) { print $self->get_name, " size_request\n"; }
+  if (DEBUG) { print "$self size_request\n"; }
 
   my $want_height = 0;
   if (my $model = $self->{'model'}) {
-    my $cellinfo_list = $self->{'cellinfo_list'};
-    if (@$cellinfo_list) {
-      my $rows = $model->iter_n_children (undef);
-      if ($self->{'fixed-height-mode'}) {
-        $rows = min ($rows, 1); # look just at first element
-      }
-      foreach my $index (0 .. $rows-1) {  # possibly no rows at all
-        my $iter = $model->iter_nth_child (undef, $index);
-        foreach my $cellinfo (@$cellinfo_list) {
-          my $cell = _cellinfo_setup ($self, $cellinfo, $model, $iter);
-          my ($x_offset, $y_offset, $width, $height)
-            = $cell->get_size ($self, undef);
+    if (my @cells = $self->GET_CELLS) {
+      my $iter = $model->iter_nth_child (undef, 0);
+      while ($iter) {
+        $self->_set_cell_data ($iter);
+        foreach my $cell (@cells) {
+          my (undef, undef, undef, $height) = $cell->get_size ($self, undef);
           $want_height = max ($want_height, $height);
         }
+        if ($self->{'fixed_height_mode'}) {
+          if (DEBUG) { print "  one row only for fixed-height-mode\n"; }
+          last;
+        }
+        $iter = $model->iter_next ($iter);
       }
     }
   }
@@ -282,11 +157,18 @@ sub do_size_request {
 #------------------------------------------------------------------------------
 # scroll timer
 
-sub do_timer {
+sub _do_timer {
   my ($ref_self) = @_;
   my $self = $$ref_self;
-  if (! $self) { return 0; }  # if weakened gone then stop timer
+  if (! $self) {
+    # shouldn't see an undef in our weak ref here, because the timer should
+    # be stopped by _do_unrealize in the course of widget destruction, but if
+    # for some reason that hasn't happened then stop the timer if the widget
+    # has gone
+    return 0;
+  }
 
+  # during a drag the timer still runs but we suppress motion
   if (! $self->is_drag_active) {
     my $step = $self->{'speed'} / $self->{'frame_rate'};
     $self->scroll_pixels ($step);
@@ -298,7 +180,7 @@ sub do_timer {
 sub _stop_timer {
   my ($self) = @_;
   if (my $id = delete $self->{'timer_id'}) {
-    if (DEBUG) { print $self->get_name," stop timer $id\n"; }
+    if (DEBUG) { print "$self stop timer $id\n"; }
     Glib::Source->remove ($id);
   }
 }
@@ -312,15 +194,15 @@ sub _update_timer {
     && $self->{'visibility_state'} ne 'fully-obscured'
     && @{$self->{'cellinfo_list'}}
     && $self->{'model'}
-    && $self->{'model'}->iter_n_children (undef);
+    && $self->{'model'}->get_iter_first;
 
   if (DEBUG) {
-    print $self->get_name, " run ", $self->{'run'},
+    print "$self run=", $self->{'run'},
       " mapped=",     $self->mapped ? 1 : 0,
       " visibility=", $self->{'visibility_state'},
-      " model=",      $self->get('model') || '(none)',
-      " rows=",       $self->get('model')
-                      ? $self->get('model')->iter_n_children(undef) : 'n/a',
+      " model=",      $self->get('model') || '[none]',
+      " nonempty=",   ! defined $self->{'model'} ? '(n/a)'
+                      : $self->{'model'}->get_iter_first ? 'yes' : 'no',
       " --> want ", ($want_timer ? 'yes' : 'no'), "\n";
   }
 
@@ -329,8 +211,8 @@ sub _update_timer {
       my $period = 1000.0 / $self->get('frame-rate');
       my $weak_self = $self;
       Scalar::Util::weaken ($weak_self);
-      if (DEBUG) { print $self->get_name," start timer\n"; }
-      Glib::Timeout->add ($period,\&do_timer,\$weak_self);
+      if (DEBUG) { print "$self start timer\n"; }
+      Glib::Timeout->add ($period, \&_do_timer, \$weak_self);
     };
   } else {
     _stop_timer ($self);
@@ -339,37 +221,41 @@ sub _update_timer {
 
 #------------------------------------------------------------------------------
 
-sub do_expose_event {
+sub _do_expose_event {
   my ($self, $event) = @_;
-  if (DEBUG >= 2) { print $self->get_name, " expose ",$event->count,"\n"; }
+  if (DEBUG >= 2) { print "$self expose ",$event->count,"\n"; }
 
   $self->{'scroll_deferred'} = 0;
   if ($self->{'scroll_in_progress'}) {
     # An Expose after our XCopyArea means we may have copied an invalidated
-    # region, redraw everything.
+    # region.  An expose and a copy "crossing" like this is unlikely, so
+    # just do a full redraw to ensure it's right.
     #
     # A GraphicsExpose from our XCopyArea would be normal and we could just
     # fill in the uncopied portions, but how to distinguish that?  Gdk seems
-    # to lump both exposes together.  Currently copy is only done when
-    # "unobscured", so for now there shouldn't be a GraphicsExpose unless an
-    # obscuring window moved over it just moments before.
+    # to lump both exposes together, or makes you block in
+    # $win->get_graphics_expose (which seems imperfect too actually).
+    # Currently a copy is only done when "unobscured", so there shouldn't be
+    # a GraphicsExpose unless an obscuring window moved over just moments
+    # before.
     #
     $self->{'scroll_in_progress'} = 0;
     $self->queue_draw;
 
   } else {
     my $region = $event->region;
+    my $win = $self->window;
     if (defined $self->{'drawn_x'}
         && POSIX::floor ($self->{'drawn_x'}) 
            != POSIX::floor ($self->{'want_x'})) {
-      # our desired position has moved by a scroll, so clear and draw everything
-      my $win = $self->window;
+      # our desired position moved by a scroll (one not yet applied with a
+      # copy or whatever), so clear and draw everything
       my ($win_width, $win_height) = $win->get_size;
       my $rect = Gtk2::Gdk::Rectangle->new (0, 0, $win_width, $win_height);
       if ($region->rect_in ($rect) ne 'in') {
         # the event specified region doesn't already cover whole window
-        $win->clear_area (0, 0, $win_width, $win_height);
         $region = Gtk2::Gdk::Region->rectangle ($rect);
+        # $win->clear;
       }
     }
     _draw_region ($self, $region);
@@ -377,88 +263,151 @@ sub do_expose_event {
   return 0; # propagate event
 }
 
+# return a new iter which is the last child under the given $iter
+# $iter can be undef to get the last top-level
+# if there's no children under $iter the return is undef
+sub _model_iter_last_child {
+  my ($model, $iter) = @_;
+  my $nchildren = $model->iter_n_children ($iter);
+  #  if ($nchildren == 0) { return undef; }
+  return $model->iter_nth_child ($iter, $nchildren - 1);
+}
+
+# return a new iter which is the row preceding the given $iter, and at the
+# same depth as $iter
+# if $iter is the first element at its depth then the return is undef
+sub _model_iter_prev {
+  my ($model, $iter) = @_;
+  my $path = $model->get_path ($iter);
+  if ($path->prev) {
+    return $model->get_iter ($path);
+  } else {
+    return _model_iter_last_child ($model, $model->iter_parent ($iter));
+  }
+}
+
+use Data::Dumper;
 sub _draw_region {
   my ($self, $region) = @_;
 
   my $model = $self->{'model'};
   if (! $model) {
-    if (DEBUG) { print $self->get_name," no model to draw\n"; }
+    if (DEBUG) { print "$self no model to draw\n"; }
     return;
   }
-  my $rows = $model->iter_n_children (undef);
-  if ($rows == 0) {
-    if (DEBUG) { print $self->get_name," model has no rows\n"; }
-    return;
-  }
+
   my $cellinfo_list = $self->{'cellinfo_list'};
   if (! @$cellinfo_list) {
-    if (DEBUG) { print $self->get_name," no cell renderers to draw with\n"; }
+    if (DEBUG) { print "$self no cell renderers to draw with\n"; }
     return;
   }
+  my $x = POSIX::floor ($self->{'want_x'});
 
-  my $ltor   = $self->get_direction eq 'ltr';
-  my $win    = $self->window;
-  my ($win_width, $win_height) = $win->get_size;
-  my $x      = POSIX::floor ($self->{'want_x'});
+  # order the cells per their "pack_start" or "pack_end"
+  $cellinfo_list = [ grep ({$_->{'pack'} eq 'start'} @$cellinfo_list),
+                     reverse grep {$_->{'pack'} eq 'end'} @$cellinfo_list ];
 
   my $index = $self->{'want_index'};
-  # new model might have fewer rows
-  if ($index >= $rows) { $index = $self->{'want_index'} = $rows-1; }
-
   if ($index != $self->{'drawn_index'}) {
+    if (DEBUG) { print "$self full region for different index: ",
+                   " want $index drawn ", $self->{'drawn_index'}, "\n"; }
+    my $win = $self->window;
+    my ($win_width, $win_height) = $win->get_size;
     $region = Gtk2::Gdk::Region->rectangle
       (Gtk2::Gdk::Rectangle->new (0, 0, $win_width, $win_height));
   }
-  $self->{'drawn_index'} = $index;
-  $self->{'drawn_x'} = $self->{'want_x'};
 
   # If a backwards scroll has moved the starting offset into the window,
   # ie. x>0, then decrement $index enough to be x<=0.
   #
-  my $all_zeros = _make_all_zeros_proc();
-  while ($x > 0) {
-    $index--;
-    if ($index < 0) { $index = $rows-1; }
-    my $total_width = 0;
-    my $iter = $model->iter_nth_child (undef, $index);
+  if ($x > 0) {
+    if (DEBUG) { print "$self back up for negative scroll\n"; }
 
-    foreach my $cellinfo (@$cellinfo_list) {
-      my $cell = _cellinfo_setup ($self, $cellinfo, $model, $iter);
-      if (! $cell->get('visible')) { next; }
-      my ($x_offset, $y_offset, $width, $height)
-        = $cell->get_size ($self, undef);
-      $total_width += $width;
-    }
-    if (&$all_zeros ($index, $total_width)) {
-      if (DEBUG) { print $self->get_name," all cell widths on all rows are zero\n"; }
-      $self->{'want_x'} = 0;
+    my $all_zeros = _make_all_zeros_proc();
+    do {
+      $index--;
+      if ($index < 0) {
+        $index = max (0, $model->iter_n_children (undef) - 1);
+      }
+      my $iter = $model->iter_nth_child (undef, $index);
+      if (! $iter) {
+        # perhaps index left dodgy by new model
+        $index = 0;
+        $iter = $model->get_iter_first;
+        if (! $iter) {
+          if (DEBUG) { print "$self model has no rows\n"; }
+          return;
+        }
+      }
+
+      $self->_set_cell_data ($iter);
+      my $total_width = 0;
+      foreach my $cellinfo (@$cellinfo_list) {
+        my $cell = $cellinfo->{'cell'};
+        if (! $cell->get('visible')) { next; }
+        my (undef, undef, $width, undef) = $cell->get_size ($self, undef);
+        $total_width += $width;
+      }
+      if ($all_zeros->($index, $total_width)) {
+        if (DEBUG) { print "$self all cell widths on all rows are zero\n"; }
+        $self->{'want_x'} = $self->{'drawn_x'} = 0;
+        return;
+      }
+
+      $x -= $total_width;
+      $self->{'drawn_x'} = ($self->{'want_x'} -= $total_width);
+    } while ($x > 0);
+
+    $self->{'want_index'} = $index;
+    $self->{'drawn_index'} = $index;
+  }
+
+  $self->{'drawn_index'} = $index;
+  $self->{'drawn_x'} = $self->{'want_x'};
+
+  my $iter = $model->iter_nth_child (undef, $index);
+  if (! $iter) {
+    # new model might have fewer rows, and perhaps no rows at all
+    if (DEBUG) { print "$self nothing at index $index\n"; }
+    $index = 0;
+    $iter = $model->get_iter_first;
+    if (! $iter) {
+      if (DEBUG) { print "  model has no rows\n"; }
       return;
     }
-
-    $x -= $total_width;
-    $self->{'want_x'} -= $total_width;
-    $self->{'want_index'} = $index;
-    $self->{'drawn_x'} = $self->{'want_x'};
-    $self->{'drawn_index'} = $index;
   }
 
   # fresh check because working forwards now (could cross index==0 a second
   # time without seeing everything)
-  $all_zeros = _make_all_zeros_proc();
+  my $all_zeros = _make_all_zeros_proc();
 
+  my $ltor   = $self->get_direction eq 'ltr';
+  my $win    = $self->window;
+  my ($win_width, $win_height) = $win->get_size;
+
+  # in this loop $index is maintained for two reasons,
+  #   - to increment the stored $self->{'want_index'} while $x<=0 to step
+  #     along for a positive scroll (ie. the whole of the current $index is
+  #     off the left of the window)
+  #   - to let &$all_zeros() notice when we've traversed the whole model
+  #     without seeing a non-zero cell width
+  # but $iter is stepped with $model->iter_next in case the model can "go to
+  # next" more efficiently than doing a get_nth_child every time
+  #
   while ($x < $win_width) {
     if ($x <= 0) {
-      $self->{'want_index'} = $index;
-      $self->{'drawn_index'} = $index;
-      $self->{'want_x'} = $self->{'want_x'} - POSIX::floor ($self->{'want_x'})
-                            + $x;
-      $self->{'drawn_x'} = $self->{'want_x'};
+      if (DEBUG >= 2) {
+        print "$self advance to idx=$index/x=$x for positive scroll\n"; }
+      $self->{'want_index'} = $self->{'drawn_index'} = $index;
+      # preserve fraction part
+      $self->{'want_x'} = $self->{'drawn_x'}
+        = $x + $self->{'want_x'} - POSIX::floor ($self->{'want_x'});
     }
     my $total_width = 0;
-    my $iter = $model->iter_nth_child (undef, $index);
-
+    
+    $self->_set_cell_data ($iter);
     foreach my $cellinfo (@$cellinfo_list) {
-      my $cell = _cellinfo_setup ($self, $cellinfo, $model, $iter);
+      my $cell = $cellinfo->{'cell'};
       if (! $cell->get('visible')) { next; }
 
       my ($x_offset, $y_offset, $width, $height)
@@ -466,24 +415,34 @@ sub _draw_region {
 
       if ($x + $width > 0) { # only once inside the window
         my $rect = $ltor
-          ? Gtk2::Gdk::Rectangle->new ($x, 0,
-                                       $width, $win_height)
-          : Gtk2::Gdk::Rectangle->new ($win_width - 1 - $x - $width, 0,
-                                       $width, $win_height);
+          ? Gtk2::Gdk::Rectangle->new ($x, 0, $width, $win_height)
+            : Gtk2::Gdk::Rectangle->new ($win_width - 1 - $x - $width, 0,
+                                         $width, $win_height);
         if (my $exposerect = _rect_intersect_region ($rect, $region)) {
+          $win->clear_area ($exposerect->x, $exposerect->y,
+                            $exposerect->width, $exposerect->height);
           $cell->render ($win, $self, $rect, $rect, $exposerect, []);
         }
       }
       $x += $width;
       $total_width += $width;
     }
-    if (&$all_zeros ($index, $total_width)) {
-      if (DEBUG) { print $self->get_name," all cell widths on all rows are zero\n"; }
+    if ($all_zeros->($index, $total_width)) {
+      if (DEBUG) { print "$self all cell widths on all rows are zero\n"; }
       $self->{'want_x'} = 0;
       last;  # avoid infinite loop!
     }
+
     $index++;
-    if ($index >= $rows) { $index = 0; }
+    $iter = $model->iter_next ($iter);
+    if (! $iter) {
+      $index = 0;
+      $iter = $model->get_iter_first;
+      if (! $iter) {
+        if (DEBUG) { print "$self  model has no rows\n"; }
+        return;
+      }
+    }
   }
 }
 
@@ -565,7 +524,7 @@ sub _scroll_idle_handler {
   $self->{'scroll_in_progress'} = 1;
 
   if (DEBUG >= 2) { print "  draw $redraw_x width $redraw_width\n"; }
-  $win->clear_area ($redraw_x, 0, $redraw_width, $win_height);
+  # $win->clear;
   _draw_region ($self,
                 Gtk2::Gdk::Region->rectangle
                 (Gtk2::Gdk::Rectangle->new
@@ -588,9 +547,9 @@ sub _ensure_scroll_idle {
   };
 }
 
-sub do_no_expose_event {
+sub _do_no_expose_event {
   my ($self, $event) = @_;
-  if (DEBUG >= 2) { print $self->get_name," no expose",
+  if (DEBUG >= 2) { print "$self no expose",
                       ($self->{'scroll_deferred'} ? " pending scroll" : ""),
                       "\n"; }
   $self->{'scroll_in_progress'} = 0;
@@ -627,16 +586,16 @@ sub is_drag_active {
 }
 
 # 'visibility_notify_event' class closure
-sub do_visibility_notify_event {
+sub _do_visibility_notify_event {
   my ($self, $event) = @_;
-  if (DEBUG) { print $self->get_name," visibility ",$event->state,"\n"; }
+  if (DEBUG) { print "$self visibility ",$event->state,"\n"; }
   $self->{'visibility_state'} = $event->state;
   _update_timer ($self);
   return $self->signal_chain_from_overridden ($event);
 }
 
 # 'button_press_event' class closure
-sub do_button_press_event {
+sub _do_button_press_event {
   my ($self, $event) = @_;
   if ($event->button == 1) {
     $self->{'drag_x'} = $event->x;
@@ -656,14 +615,14 @@ sub _motion_notify_scroll {
 }
 
 # 'motion_notify_event' class closure
-sub do_motion_notify_event {
+sub _do_motion_notify_event {
   my ($self, $event) = @_;
   _motion_notify_scroll ($self, $event);
   return $self->signal_chain_from_overridden ($event);
 }
 
 # 'button_release_event' class closure
-sub do_button_release_event {
+sub _do_button_release_event {
   my ($self, $event) = @_;
   if ($event->button == 1) {
     # final dragged position from X,Y in this release event
@@ -674,7 +633,7 @@ sub do_button_release_event {
 }
 
 # 'map' class closure
-sub do_map {
+sub _do_map {
   my ($self) = @_;
   $self->signal_chain_from_overridden;
   _update_timer ($self);
@@ -685,74 +644,65 @@ sub do_map {
 # There's no chain_from_overridden here because the GtkWidget code (as of
 # gtk 2.12) in gtk_widget_direction_changed() does a queue_resize, which we
 # don't need or want.
-sub do_direction_changed {
+sub _do_direction_changed {
   my ($self, $prev_dir) = @_;
   $self->queue_draw;
 }
 
-sub do_row_changed {
+sub _do_row_changed {
   my ($model, $path, $iter, $ref_self) = @_;
   my $self = $$ref_self;
   $self->queue_draw;
 }
 
-sub do_row_inserted {
+sub _do_row_inserted {
   my ($model, $ins_path, $ins_iter, $ref_self) = @_;
   my $self = $$ref_self;
-  my $rows = $model->iter_n_children (undef);
 
   # if inserted before current then advance
   my ($ins_index) = $ins_path->get_indices;
   if ($ins_index <= $self->{'want_index'}) {
     $self->{'want_index'}++;
-    if ($self->{'want_index'} > $rows) {
-      $self->{'want_index'} = 0;
-    }
     if (DEBUG) { print "row_inserted at or before, move index to ",
                    $self->{'want_index'},"\n"; }
   }
 
-  if ($rows == 1) {
-    # become non-empty
+  my $newly_nonempty = ! $model->iter_nth_child (undef, 1);
+  if ($newly_nonempty) {
     _update_timer ($self);
   }
-
-  if ($rows == 1 || ! $self->{'fixed-height-mode'}) {
+  if ($newly_nonempty || ! $self->{'fixed_height_mode'}) {
     # become non-empty, or any new row when every row checked for size
     $self->queue_resize;
   }
   $self->queue_draw;
 }
 
-sub do_row_deleted {
+sub _do_row_deleted {
   my ($model, $del_path, $ref_self) = @_;
   my $self = $$ref_self;
   if (DEBUG) { print "row_deleted, current index ",$self->{'want_index'},"\n";}
-  my $rows = $model->iter_n_children (undef);
 
   # if deleted before current then decrement
   my ($del_index) = $del_path->get_indices;
   if ($del_index < $self->{'want_index'}) {
-    if (--$self->{'want_index'} < 0) {
-      $self->goto_index (max (0, $rows - 1));
-    }
+    $self->{'want_index'}--;
     if (DEBUG) { print " delete $del_index is before, move to ",
                    $self->{'want_index'},"\n"; }
   }
 
-  if ($rows == 0) {
-    # become empty
+  my $empty = ! $model->get_iter_first;
+  if ($empty) {
     _update_timer ($self);
   }
-
-  if ($rows == 0 || ! $self->{'fixed-height-mode'}) {
+  if ($empty || ! $self->{'fixed_height_mode'}) {
     # become empty, or any delete when every row checked for size
     $self->queue_resize;
   }
   $self->queue_draw;
 }
 
-sub do_rows_reordered {
+sub _do_rows_reordered {
   my ($model, $reordered_path, $reordered_iter, $aref, $ref_self) = @_;
   my $self = $$ref_self;
 
@@ -767,27 +717,31 @@ sub SET_PROPERTY {
   my $pname = $pspec->get_name;
   my $oldval = $self->{$pname};
   $self->{$pname} = $newval;  # per default GET_PROPERTY
-  if (DEBUG) { print $self->get_name," set $pname  $newval\n"; }
+  if (DEBUG) { print "$self set $pname  ",
+                 defined $newval ? $newval : '[undef]', "\n"; }
 
   if ($pname eq 'model' && ($oldval||0) != ($newval||0)) {
-    my $old_model = $oldval;
-    foreach my $id (@{$self->{'model_ids'}}) {
-      $old_model->signal_handler_disconnect ($id);
+    _disconnect_model ($self, $oldval);
+    if (my $model = $newval) {
+      my $weak_self = $self;
+      Scalar::Util::weaken ($weak_self);
+      my $ref_self = \$weak_self;
+      $self->{'model_ids'} =
+        [$model->signal_connect(row_changed   =>\&_do_row_changed,  $ref_self),
+         $model->signal_connect(row_inserted  =>\&_do_row_inserted, $ref_self),
+         $model->signal_connect(row_deleted   =>\&_do_row_deleted,  $ref_self),
+         $model->signal_connect(rows_reordered=>\&_do_rows_reordered,$ref_self)
+        ];
     }
-    my $model = $newval;
-    my $weak_self = $self;
-    Scalar::Util::weaken ($weak_self);
-    my $ref_self = \$weak_self;
-    $self->{'model_ids'} =
-      [$model->signal_connect('row-changed',   \&do_row_changed,   $ref_self),
-       $model->signal_connect('row-inserted',  \&do_row_inserted,  $ref_self),
-       $model->signal_connect('row-deleted',   \&do_row_deleted,   $ref_self),
-       $model->signal_connect('rows-reordered',\&do_rows_reordered,$ref_self)
-      ];
   }
-  if (($pname eq 'model' || $pname eq 'fixed_height_mode')
-      && ($oldval||0) != ($newval||0)) {
+  if (($pname eq 'model' && ($oldval||0) != ($newval||0))
+      || $pname eq 'fixed_height_mode' && $oldval && ! $newval) {
+    # Any model change, or turning off fixed height mode.
     $self->queue_resize;
+
+    # When turning fixed height mode on there's no need for a resize; the
+    # size we have is based on all rows and assuming the first row is truely
+    # representative then its size is the same as what we've got already.
   }
   if ($pname eq 'model' || $pname eq 'run' || $pname eq 'frame_rate') {
     if ($pname eq 'frame_rate') { _stop_timer ($self); }  # new period
@@ -798,7 +752,7 @@ sub SET_PROPERTY {
 
 sub INIT_INSTANCE {
   my ($self) = @_;
-
+  $self->set_double_buffered (0);
   $self->{'want_index'}  = 0;
   $self->{'want_x'}      = 0;
   $self->{'drawn_index'} = -1;
@@ -816,9 +770,9 @@ sub INIT_INSTANCE {
 }
 
 # 'unmap' class closure.
-sub do_unmap {
+sub _do_unmap {
   my ($self) = @_;
-  if (DEBUG) { print $self->get_name," unmap\n"; }
+  if (DEBUG) { print "$self unmap\n"; }
   # chain before _update_timer(), so the GtkWidget code clears the mapped flag
   $self->signal_chain_from_overridden;
   _update_timer ($self);
@@ -826,12 +780,12 @@ sub do_unmap {
 
 # 'unrealize' class closure
 # When removed from a container we only get unrealize, not unmap then
-# unrealize, hence an _update_timer check here as well as in do_unmap().
-sub do_unrealize {
+# unrealize, hence an _update_timer check here as well as in _do_unmap().
+sub _do_unrealize {
   my ($self) = @_;
   # might need a different depth gc on new window
   if (my $gc = delete $self->{'copy_gc'}) {
-    if (DEBUG) { print $self->get_name," unrealize release $gc\n"; }
+    if (DEBUG) { print "$self unrealize release $gc\n"; }
     Gtk2::GC->release ($gc);
   }
   # chain before _update_timer(), so the GtkWidget code clears the mapped flag
@@ -839,17 +793,22 @@ sub do_unrealize {
   _update_timer ($self);
 }
 
+sub _disconnect_model {
+  my ($self, $model) = @_;
+  if (my $model_ids = delete $self->{'model_ids'}) {
+    foreach my $id (@$model_ids) {
+      if (DEBUG) { print "$self model disconnect $id\n"; }
+      $model->signal_handler_disconnect ($id);
+    }
+  }
+}
+
 sub FINALIZE_INSTANCE {
   my ($self) = @_;
   if (my $id = delete $self->{'scroll_idle_id'}) {
     Glib::Source->remove ($id);
   }
-  if (my $model_ids = delete $self->{'model_ids'}) {
-    foreach my $id (@$model_ids) {
-      if (DEBUG) { print $self->get_name," model disconnect $id\n"; }
-      $self->{'model'}->signal_handler_disconnect ($id);
-    }
-  }
+  _disconnect_model ($self, $self->{'model'});
 }
 
 
@@ -882,9 +841,6 @@ The interfaces implemented are:
 
     Gtk2::CellLayout
 
-Or rather the set of methods in L<Gtk2::CellLayout> are implemented, since
-as of Gtk2-Perl version 1.161 it's not yet an actual C<GInterface>.
-
 =head1 DESCRIPTION
 
 A C<Gtk2::Ex::TickerView> widget displays items from a C<Gtk2::TreeModel>
@@ -896,41 +852,42 @@ scrolling horizontally across the window, like a news bar or stock ticker.
         <---- scrolling
 
 Items are drawn using one or more C<Gtk2::CellRenderer> objects set into the
-view as per the C<Gtk2::CellLayout> interface.  For scrolling text you would
-use C<Gtk2::CellRendererText>.
+TickerView as per the C<Gtk2::CellLayout> interface.  For scrolling text for
+example you can use C<Gtk2::CellRendererText>.
 
 If two or more renderers are set then they're drawn one after the other for
-each item (ie. row of the model).  For example you could have a
+each item, ie. row of the model.  For example you could have a
 C<Gtk2::CellRendererPixbuf> to draw an icon then a C<Gtk2::CellRendererText>
 to draw some text and they scroll across together.  (The icon could use the
 model's data, or be just a fixed blob to go before every item.)
 
-The display and scrolling direction follow the widget text direction (the
-C<set_direction> method, per L<Gtk2::Widget>).  For C<ltr> mode item 0
-starts at the left of the window and items scroll to the left.  For C<rtl>
-item 0 starts at the right of the window and items scroll to the right.
+The display and scrolling direction follow the widget text direction of the
+C<set_direction> method in L<Gtk2::Widget>.  For C<ltr> mode item 0 starts
+at the left of the window and items scroll to the left.  For C<rtl> item 0
+starts at the right of the window and items scroll to the right.
 
     +----------------------------------------------------------+
     | m five  * item four  * item three  * item two  * item on |
     +----------------------------------------------------------+
                         right to left mode, scrolling ----->
 
-Any text or drawing direction within the cell renderers is a matter for
-them.  For C<Gtk2::CellRendererText> Pango recognises right-to-left scripts
-such as Arabic based on the utf-8 characters and shouldn't need any special
-setups.
+Any text or drawing direction within each cell renderers is a matter for
+them.  For example in C<Gtk2::CellRendererText> Pango recognises
+right-to-left scripts such as Arabic based on the utf-8 characters and
+shouldn't need any special setups.
 
-Currently only a list style model is expected and only the topmost level of
-the model is drawn, so for instance a C<Gtk2::ListStore> suits.  Perhaps in
-the future something will be done to descend into and draw child rows too.
+Currently only a list style model is expected, meaning only a single level,
+and only that topmost level of the model is drawn.  So for example a
+C<Gtk2::ListStore> suits.  Perhaps in the future something will be done to
+descend into and draw child rows too.
 
-The whole Gtk model/view/layout/renderer/attributes stuff as provided here
-is ridiculously complicated.  Its power comes when showing a big updating
-list or wanting customized drawing, but the amount of code to get started
-with something on the screen is not nice.  Have a look at "Tree and List
-Widget Overview" in the Gtk reference manual if you haven't already, then
-F<examples/simple.pl> in the C<Gtk2::Ex::TickerView> sources is more or less
-the minimum to actually display something.
+The whole Gtk model/view/layout/renderer/attributes as used here is
+ridiculously complicated.  Its power comes when showing a big updating list
+or wanting customized drawing, but the amount of code to get something on
+the screen is not nice.  Have a look at "Tree and List Widget Overview" in
+the Gtk reference manual if you haven't already, then F<examples/simple.pl>
+in the TickerView sources is more or less the minimum to actually display
+something.
 
 =head1 FUNCTIONS
 
@@ -938,7 +895,7 @@ the minimum to actually display something.
 
 =item C<< Gtk2::Ex::TickerView->new (key => value, ...) >>
 
-Create and return a C<Gtk2::Ex::TickerView> widget.  Optional key/value
+Create and return a new C<Gtk2::Ex::TickerView> widget.  Optional key/value
 pairs can be given to set initial properties as per
 C<< Glib::Object->new >>.
 
@@ -956,7 +913,7 @@ model.
 
 =back
 
-=head1 PROPERTIES
+=head1 OBJECT PROPERTIES
 
 =over 4
 
@@ -991,31 +948,45 @@ negotiation with the ticker's container parent much faster.
 
 =back
 
-The text direction which gives the display order and scrolling is not a
-property but instead accessed with the usual widget C<get_direction> and
+The text direction giving the display order and scrolling is not a property
+but instead accessed with the usual widget C<get_direction> and
 C<set_direction> methods (see L<Gtk2::Widget>).
 
-The C<visible> property in the cell renderer(s) is recognised and a renderer
+The C<visible> property in each cell renderer is recognised and a renderer
 that's not visible is skipped and takes no space.  Each C<visible> can be
 set globally in the renderer to suppress it entirely, or controlled with the
-attributes mechanism (or data setup function) to suppress just selected
+attributes mechanism or data setup function to suppress it just for selected
 items from the model.
 
 =head1 OTHER NOTES
 
 Mouse button 1 is setup for the user to drag the display back and forwards.
-This is good to see something that's just gone off the edge, or to skip past
-boring bits.  Perhaps in the future the button used will be customizable.
+This is good to go back and see something that's just moved off the edge, or
+to skip past boring bits.  Perhaps in the future the button used will be
+customizable.
 
-Some scrolling optimizations are attempted.  In the current implementation
-when the window is unobscured a scroll is done by a "CopyArea" and a draw of
-the balance at the end.  To avoid hammering the server any further copying
-is deferred until hearing back from the server that the last completed (a
-NoExpose event normally).  All scroll steps are also spun through an idle
-handler (at roughly C<GDK_PRIORITY_REDRAW> priority), with the aim of
-collapsing say multiple MotionNotify events from a user drag.  The effect of
-all this is probably only noticable if your C<frame-rate> is a bit too high
-or the server is lagged by other operations.
+Some care is taken with drawing for scrolling.  If unobscured then scrolling
+uses "CopyArea" and a draw of just the balance at the end.  To avoid
+hammering the X server any further scroll waits until hearing from the
+server that the last completed (a NoExpose event normally).  If partly
+obscured then alas plain full redraws must be used, though working
+progressively by cell to reduce flashing.  Avoidance of hammering is left up
+to C<queue_draw> in that case.  The effect of all this is probably only
+noticeable if your C<frame-rate> is a bit too high or the server is lagged
+by other operations.
+
+Scroll steps are always spun through an idle handler too, at roughly
+C<GDK_PRIORITY_REDRAW> priority since they represent redraws, the aim being
+to collapse multiple MotionNotify events from a user drag or multiple
+programmatic C<scroll_pixels> calls from slack application code.
+
+The Gtk reference documentation for C<GtkCellLayout> doesn't have a
+description of exactly how C<pack_start> and C<pack_end> end up ordering
+cells, but it's the same as C<GtkBox> and a description can be found there.
+Basically each cell is noted as "start" or "end", the starts are drawn from
+the left, the ends are drawn from the right.  In C<Gtk2::Ex::TickerView> the
+ends immediately follow the starts (there's no gap in between, unlike say in
+a C<Gtk2::HBox>).
 
 =head1 SEE ALSO
 
