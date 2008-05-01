@@ -32,7 +32,8 @@ WriteMakefile
                     # Gtk2::CellLayout as a GInterface
                     Gtk2 => 1.180,
 
-                    Gtk2::Ex::CellLayout::Base => 0,
+                    # need version 2 for its Gtk2::Buildable support
+                    Gtk2::Ex::CellLayout::Base => 2,
 
                     # actually Gtk2 requires perl 5.8, which has List::Util
                     # and Scalar::Util builtin already
@@ -42,6 +43,7 @@ WriteMakefile
    clean        => { FILES => "TickerView.html" },
   );
 
+
 sub MY::postamble {
   return <<'MAKE_FRAG';
 
@@ -50,9 +52,9 @@ lint:
 	podchecker lib/Gtk2/Ex/TickerView.pm
 
 myman:
-	rm -f MANIFEST
+	mv MANIFEST MANIFEST.old
 	touch SIGNATURE
-	make manifest
+	(make manifest 2>&1; diff -u MANIFEST.old MANIFEST) |less
 
 TickerView.html: lib/Gtk2/Ex/TickerView.pm Makefile
 	-perl -MPod::Simple::HTML -e Pod::Simple::HTML::go \
@@ -82,6 +84,16 @@ copyright-years-check: $(DISTVNAME).tar.gz
 	    fi; \
 	  done; \
 	  exit $$result)
+
+diff-prev:
+	rm -rf diff.tmp
+	mkdir diff.tmp
+	cd diff.tmp \
+	&& tar xfz ../$(NAME)-`expr $(VERSION) - 1`.tar.gz \
+	&& tar xfz ../$(NAME)-$(VERSION).tar.gz
+	-cd diff.tmp; diff -ur $(NAME)-`expr $(VERSION) - 1` \
+	                       $(NAME)-$(VERSION) >tree.diff
+	-less diff.tmp/tree.diff
 
 MAKE_FRAG
 }

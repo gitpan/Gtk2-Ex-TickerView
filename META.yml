@@ -1,12 +1,12 @@
 # http://module-build.sourceforge.net/META-spec.html
 #XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
 name:         Gtk2-Ex-TickerView
-version:      2
+version:      3
 version_from: lib/Gtk2/Ex/TickerView.pm
 installdirs:  site
 requires:
     Gtk2:                          1.18
-    Gtk2::Ex::CellLayout::Base:    0
+    Gtk2::Ex::CellLayout::Base:    2
     List::Util:                    0
     Scalar::Util:                  0
 

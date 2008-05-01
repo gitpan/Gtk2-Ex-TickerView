@@ -23,9 +23,10 @@ use Glib;
 use Gtk2 1.180;  # 1.180 for Gtk2::CellLayout interface
 use List::Util qw(min max);
 use POSIX qw(FLT_MAX);
+use Gtk2::Ex::CellLayout::Base 2;  # version 2 for Gtk2::Buildable
 use base 'Gtk2::Ex::CellLayout::Base';
 
-our $VERSION = 2;
+our $VERSION = 3;
 
 # set this to 1 for some diagnostic prints, or 2 for even more prints
 use constant DEBUG => 0;
@@ -40,7 +41,7 @@ use constant GTK_PRIORITY_REDRAW => (Glib::G_PRIORITY_HIGH_IDLE + 20);
 
 use Glib::Object::Subclass
   Gtk2::DrawingArea::,
-  interfaces => [ 'Gtk2::CellLayout' ],
+  interfaces => [ 'Gtk2::CellLayout', 'Gtk2::Buildable' ],
   signals => { expose_event            => \&_do_expose_event,
                no_expose_event         => \&_do_no_expose_event,
                size_request            => \&_do_size_request,
@@ -94,7 +95,7 @@ use Glib::Object::Subclass
 #------------------------------------------------------------------------------
 # generic helpers
 
-# return a procedure to be called &$func($index,$width), it returns true
+# return a procedure to be called $func->($index,$width), it returns true
 # until/unless it sees that all $index values have $width==0
 #
 sub _make_all_zeros_proc {
@@ -128,12 +129,13 @@ sub _rect_intersect_region {
 # 'size_request' class closure
 sub _do_size_request {
   my ($self, $req) = @_;
-  if (DEBUG) { print "$self size_request\n"; }
+  if (DEBUG) { print "size_request $self\n"; }
 
   my $want_height = 0;
   if (my $model = $self->{'model'}) {
     if (my @cells = $self->GET_CELLS) {
-      my $iter = $model->iter_nth_child (undef, 0);
+      my $iter = $model->get_iter_first;
+      if (DEBUG) { if (! $iter) { print "  model is empty\n"; } }
       while ($iter) {
         $self->_set_cell_data ($iter);
         foreach my $cell (@cells) {
@@ -148,7 +150,7 @@ sub _do_size_request {
       }
     }
   }
-  if (DEBUG) { print "  decide $want_height\n"; }
+  if (DEBUG) { print "  decide height $want_height\n"; }
 
   $req->width (0);
   $req->height ($want_height);
@@ -192,6 +194,7 @@ sub _update_timer {
   my $want_timer = $self->{'run'}
     && $self->mapped
     && $self->{'visibility_state'} ne 'fully-obscured'
+    && $self->{'cellinfo_list'}
     && @{$self->{'cellinfo_list'}}
     && $self->{'model'}
     && $self->{'model'}->get_iter_first;
@@ -286,7 +289,6 @@ sub _model_iter_prev {
   }
 }
 
-use Data::Dumper;
 sub _draw_region {
   my ($self, $region) = @_;
 
@@ -811,7 +813,6 @@ sub FINALIZE_INSTANCE {
   _disconnect_model ($self, $self->{'model'});
 }
 
-
 1;
 __END__
 
@@ -957,6 +958,26 @@ that's not visible is skipped and takes no space.  Each C<visible> can be
 set globally in the renderer to suppress it entirely, or controlled with the
 attributes mechanism or data setup function to suppress it just for selected
 items from the model.
+
+=head1 BUILDABLE
+
+C<Gtk2::Ex::TickerView> implements the C<Gtk2::Buildable> interface so
+C<Gtk2::Builder> can be used to construct a TickerView.  The class name is
+C<Gtk2__Ex__TickerView> and renderers and attributes are added as per
+C<GtkCellLayout>.  Here's an example, or see F<examples/builder.pl> in the
+C<Gtk2::Ex::TickerView> sources for a complete program,
+
+    <object class="Gtk2__Ex__TickerView" id="myticker">
+      <property name="model">myliststore</property>
+      <child>
+        <object class="GtkCellRendererText" id="myrenderer">
+          <property name="xpad">10</property>
+        </object>
+        <attributes>
+          <attribute name="text">0</attribute>
+        </attributes>
+      </child>
+    </object>
 
 =head1 OTHER NOTES
 

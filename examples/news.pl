@@ -80,7 +80,7 @@ foreach my $str ('News time 12:34:56',
                  'Barbers Union boycotts fringe festival',
                  'Scientists say space is big - really, really, big',
                  'Colonel Kurtz denies his methods are unsound',
-                 'Norville Barnes appointed president of Hudsucker Industries',
+                 'Norville Barnes appointed president of Hudsucker',
                 ) {
   $liststore->set_value ($liststore->append, 0, $str);
 }

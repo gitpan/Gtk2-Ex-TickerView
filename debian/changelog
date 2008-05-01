@@ -1,5 +1,5 @@
-libgtk2-ex-tickerview-perl (2-1) unstable; urgency=low
+libgtk2-ex-tickerview-perl (3-1) unstable; urgency=low
 
   * Packaged version.
 
- -- Kevin Ryde <user42@zip.com.au>  Sat, 19 Jan 2008 12:31:56 +1100
+ -- Kevin Ryde <user42@zip.com.au>  Wed, 30 Apr 2008 13:43:14 +1000

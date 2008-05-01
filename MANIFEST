@@ -6,6 +6,7 @@ debian/copyright
 debian/rules
 debian/watch
 devel/ticker-cells.pl
+examples/builder.pl
 examples/news.pl
 examples/order.pl
 examples/simple.pl

@@ -16,13 +16,14 @@
 # with Gtk2-Ex-TickerView.  If not, see <http://www.gnu.org/licenses/>.
 
 
-use Test::More tests => 30;
+use Test::More tests => 31;
 
 use Gtk2;
 use Gtk2::Ex::TickerView;
 use Scalar::Util;
 
 ok ($Gtk2::Ex::TickerView::VERSION >= 1);
+ok (Gtk2::Ex::TickerView->VERSION >= 1);
 
 {
   my $all_zeros = Gtk2::Ex::TickerView::_make_all_zeros_proc();
