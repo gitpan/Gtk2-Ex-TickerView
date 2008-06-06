@@ -1,14 +1,18 @@
-# http://module-build.sourceforge.net/META-spec.html
-#XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
-name:         Gtk2-Ex-TickerView
-version:      3
-version_from: lib/Gtk2/Ex/TickerView.pm
-installdirs:  site
-requires:
-    Gtk2:                          1.18
+--- #YAML:1.0
+name:                Gtk2-Ex-TickerView
+version:             4
+abstract:            Scrolling ticker or newsbar view widget.
+license:             gpl
+author:              
+    - Kevin Ryde <user42@zip.com.au>
+generated_by:        ExtUtils::MakeMaker version 6.42
+distribution_type:   module
+requires:     
+    Glib::Ex::SignalIds:           0
+    Gtk2:                          1.180
     Gtk2::Ex::CellLayout::Base:    2
     List::Util:                    0
     Scalar::Util:                  0
-
-distribution_type: module
-generated_by: ExtUtils::MakeMaker version 6.30_01
+meta-spec:
+    url:     http://module-build.sourceforge.net/META-spec-v1.3.html
+    version: 1.3

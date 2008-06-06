@@ -16,14 +16,24 @@
 # with Gtk2-Ex-TickerView.  If not, see <http://www.gnu.org/licenses/>.
 
 
-use Test::More tests => 31;
+use Test::More tests => 32;
 
-use Gtk2;
 use Gtk2::Ex::TickerView;
-use Scalar::Util;
 
-ok ($Gtk2::Ex::TickerView::VERSION >= 1);
-ok (Gtk2::Ex::TickerView->VERSION >= 1);
+# return true if there's any signal handlers connected to $obj
+sub any_signal_connections {
+  my ($obj) = @_;
+  my @connected = grep {$obj->signal_handler_is_connected ($_)} (0 .. 500);
+  if (@connected) {
+    print "$obj signal handlers connected: ",join(' ',@connected),"\n";
+    return 1;
+  }
+  return 0;
+}
+
+
+ok ($Gtk2::Ex::TickerView::VERSION >= 4);
+ok (Gtk2::Ex::TickerView->VERSION >= 4);
 
 {
   my $all_zeros = Gtk2::Ex::TickerView::_make_all_zeros_proc();
@@ -61,6 +71,7 @@ ok (Gtk2::Ex::TickerView->VERSION >= 1);
 
 {
   my $ticker = Gtk2::Ex::TickerView->new;
+  require Gtk2;
   my $r1 = Gtk2::CellRendererText->new;
   my $r2 = Gtk2::CellRendererText->new;
   $ticker->pack_start ($r1, 0);
@@ -99,12 +110,13 @@ ok (Gtk2::Ex::TickerView->VERSION >= 1);
 }
 
 SKIP: {
-  if (! Gtk2->init_check) { skip 'due to no DISPLAY available', 4; }
+  if (! Gtk2->init_check) { skip 'due to no DISPLAY available', 5; }
 
   {
     my $m1 = Gtk2::ListStore->new ('Glib::String');
     my $m2 = Gtk2::ListStore->new ('Glib::String');
     my $ticker = Gtk2::Ex::TickerView->new (model => $m1);
+    require Scalar::Util;
     Scalar::Util::weaken ($m1);
     $ticker->set(model => $m2);
     is ('not defined',
@@ -136,6 +148,13 @@ SKIP: {
         defined $get_model ? 'defined' : 'not defined',
         'unset model from ticker');
   }
-};
+  {
+    my $store = Gtk2::ListStore->new ('Glib::String');
+    my $ticker = Gtk2::Ex::TickerView->new (model => $store);
+    $ticker->set (model => undef);
+    ok (! any_signal_connections ($store),
+       'no signal handlers left on model when unset');
+  }
+}
 
 exit 0;

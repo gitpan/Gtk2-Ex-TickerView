@@ -20,13 +20,14 @@ use strict;
 use warnings;
 use Carp;
 use Glib;
-use Gtk2 1.180;  # 1.180 for Gtk2::CellLayout interface
+# 1.180 for Gtk2::CellLayout interface and for working $region->get_clipbox
+use Gtk2 1.180;
 use List::Util qw(min max);
-use POSIX qw(FLT_MAX);
+use POSIX qw(DBL_MAX);
 use Gtk2::Ex::CellLayout::Base 2;  # version 2 for Gtk2::Buildable
 use base 'Gtk2::Ex::CellLayout::Base';
 
-our $VERSION = 3;
+our $VERSION = 4;
 
 # set this to 1 for some diagnostic prints, or 2 for even more prints
 use constant DEBUG => 0;
@@ -68,19 +69,19 @@ use Glib::Object::Subclass
                   1, # default yes
                   Glib::G_PARAM_READWRITE),
 
-                 Glib::ParamSpec->float
+                 Glib::ParamSpec->double
                  ('speed',
                   'speed',
                   'Speed to move the items across, in pixels per second.',
-                  0, FLT_MAX,
+                  0, DBL_MAX,
                   DEFAULT_SPEED,
                   Glib::G_PARAM_READWRITE),
 
-                 Glib::ParamSpec->float
+                 Glib::ParamSpec->double
                  ('frame-rate',
                   'frame-rate',
                   'How many times per second to move for scrolling.',
-                  0, FLT_MAX,
+                  0, DBL_MAX,
                   DEFAULT_FRAME_RATE,
                   Glib::G_PARAM_READWRITE),
 
@@ -95,8 +96,17 @@ use Glib::Object::Subclass
 #------------------------------------------------------------------------------
 # generic helpers
 
-# return a procedure to be called $func->($index,$width), it returns true
-# until/unless it sees that all $index values have $width==0
+# Return a procedure to be called $func->($index,$width), designed to
+# protect against every $index having a zero $width.
+#
+# It returns true until it sees $index==0 and then $index==0 a second time,
+# with every call (every $index value) having $width==0.  The idea is that
+# the ticker has looped around all the way from zero back to zero and seen
+# every $width equal to zero then it should bail out.
+#
+# Any non-zero $width seen makes the returned procedure always return true.
+# It might be just a single index position out of thousands, but that's
+# enough.
 #
 sub _make_all_zeros_proc {
   my $seen_nonzero = 0;
@@ -117,11 +127,15 @@ sub _rect_intersect_region {
 
   $region = $region->copy;
   $region->intersect (Gtk2::Gdk::Region->rectangle ($rect));
+  return $region->get_clipbox;
+}
 
-  # get_clipbox is buggy in Gtk2-Perl 1.161
-  my ($ret, @rects) = $region->get_rectangles;
-  foreach (@rects) { $ret = $ret->union ($_); }
-  return $ret;
+# do a window clear on the given $region
+sub _window_clear_region {
+  my ($win, $region) = @_;
+  foreach my $rect ($region->get_rectangles) {
+    $win->clear_area ($rect->x, $rect->y, $rect->width, $rect->height);
+  }
 }
 
 #------------------------------------------------------------------------------
@@ -160,15 +174,12 @@ sub _do_size_request {
 # scroll timer
 
 sub _do_timer {
-  my ($ref_self) = @_;
-  my $self = $$ref_self;
-  if (! $self) {
-    # shouldn't see an undef in our weak ref here, because the timer should
-    # be stopped by _do_unrealize in the course of widget destruction, but if
-    # for some reason that hasn't happened then stop the timer if the widget
-    # has gone
-    return 0;
-  }
+  my ($ref_weak_self) = @_;
+
+  # shouldn't see an undef in our weak ref here, because the timer should be
+  # stopped already by _do_unrealize in the course of widget destruction,
+  # but if for some reason that hasn't happened then stop the timer now
+  my $self = $$ref_weak_self or return 0; # stop timer
 
   # during a drag the timer still runs but we suppress motion
   if (! $self->is_drag_active) {
@@ -249,7 +260,7 @@ sub _do_expose_event {
     my $region = $event->region;
     my $win = $self->window;
     if (defined $self->{'drawn_x'}
-        && POSIX::floor ($self->{'drawn_x'}) 
+        && POSIX::floor ($self->{'drawn_x'})
            != POSIX::floor ($self->{'want_x'})) {
       # our desired position moved by a scroll (one not yet applied with a
       # copy or whatever), so clear and draw everything
@@ -295,13 +306,15 @@ sub _draw_region {
   my $model = $self->{'model'};
   if (! $model) {
     if (DEBUG) { print "$self no model to draw\n"; }
+  CLEAR_REGION:
+    _window_clear_region ($self->window, $region);
     return;
   }
 
   my $cellinfo_list = $self->{'cellinfo_list'};
   if (! @$cellinfo_list) {
     if (DEBUG) { print "$self no cell renderers to draw with\n"; }
-    return;
+    goto CLEAR_REGION;
   }
   my $x = POSIX::floor ($self->{'want_x'});
 
@@ -338,7 +351,7 @@ sub _draw_region {
         $iter = $model->get_iter_first;
         if (! $iter) {
           if (DEBUG) { print "$self model has no rows\n"; }
-          return;
+          goto CLEAR_REGION;
         }
       }
 
@@ -353,7 +366,7 @@ sub _draw_region {
       if ($all_zeros->($index, $total_width)) {
         if (DEBUG) { print "$self all cell widths on all rows are zero\n"; }
         $self->{'want_x'} = $self->{'drawn_x'} = 0;
-        return;
+        goto CLEAR_REGION;
       }
 
       $x -= $total_width;
@@ -375,7 +388,7 @@ sub _draw_region {
     $iter = $model->get_iter_first;
     if (! $iter) {
       if (DEBUG) { print "  model has no rows\n"; }
-      return;
+      goto CLEAR_REGION;
     }
   }
 
@@ -406,7 +419,7 @@ sub _draw_region {
         = $x + $self->{'want_x'} - POSIX::floor ($self->{'want_x'});
     }
     my $total_width = 0;
-    
+
     $self->_set_cell_data ($iter);
     foreach my $cellinfo (@$cellinfo_list) {
       my $cell = $cellinfo->{'cell'};
@@ -432,7 +445,7 @@ sub _draw_region {
     if ($all_zeros->($index, $total_width)) {
       if (DEBUG) { print "$self all cell widths on all rows are zero\n"; }
       $self->{'want_x'} = 0;
-      last;  # avoid infinite loop!
+      goto CLEAR_REGION;
     }
 
     $index++;
@@ -442,19 +455,20 @@ sub _draw_region {
       $iter = $model->get_iter_first;
       if (! $iter) {
         if (DEBUG) { print "$self  model has no rows\n"; }
-        return;
+        goto CLEAR_REGION;
       }
     }
   }
 }
 
 sub _scroll_idle_handler {
-  my ($ref_self) = @_;
-  my $self = $$ref_self;
+  my ($ref_weak_self) = @_;
+  my $self = $$ref_weak_self;
   if (! $self) {
     # weak ref turned to undef -- we ought to have removed this handler in
     # FINALIZE_INSTANCE, so probably this shouldn't be reached
-    if (DEBUG) { print "oops, scroll idle called after weakened to undef\n"; }
+    if (DEBUG) {
+      print "TickerView: oops, scroll idle called after weakened to undef\n"; }
     return 0;  # remove idle
   }
   if (DEBUG >= 2) { print "scroll idle\n"; }
@@ -652,14 +666,14 @@ sub _do_direction_changed {
 }
 
 sub _do_row_changed {
-  my ($model, $path, $iter, $ref_self) = @_;
-  my $self = $$ref_self;
+  my ($model, $path, $iter, $ref_weak_self) = @_;
+  my $self = $$ref_weak_self or return;
   $self->queue_draw;
 }
 
 sub _do_row_inserted {
-  my ($model, $ins_path, $ins_iter, $ref_self) = @_;
-  my $self = $$ref_self;
+  my ($model, $ins_path, $ins_iter, $ref_weak_self) = @_;
+  my $self = $$ref_weak_self or return;
 
   # if inserted before current then advance
   my ($ins_index) = $ins_path->get_indices;
@@ -681,8 +695,8 @@ sub _do_row_inserted {
 }
 
 sub _do_row_deleted {
-  my ($model, $del_path, $ref_self) = @_;
-  my $self = $$ref_self;
+  my ($model, $del_path, $ref_weak_self) = @_;
+  my $self = $$ref_weak_self or return;
   if (DEBUG) { print "row_deleted, current index ",$self->{'want_index'},"\n";}
 
   # if deleted before current then decrement
@@ -705,8 +719,8 @@ sub _do_row_deleted {
 }
 
 sub _do_rows_reordered {
-  my ($model, $reordered_path, $reordered_iter, $aref, $ref_self) = @_;
-  my $self = $$ref_self;
+  my ($model, $reordered_path, $reordered_iter, $aref, $ref_weak_self) = @_;
+  my $self = $$ref_weak_self or return;
 
   # follow start to new index
   $self->{'want_index'} = ($aref->[$self->{'want_index'}] || 0);
@@ -723,30 +737,44 @@ sub SET_PROPERTY {
                  defined $newval ? $newval : '[undef]', "\n"; }
 
   if ($pname eq 'model' && ($oldval||0) != ($newval||0)) {
-    _disconnect_model ($self, $oldval);
-    if (my $model = $newval) {
+    my $model = $newval;
+
+    $self->{'model_ids'} = $model && do {
       my $weak_self = $self;
       Scalar::Util::weaken ($weak_self);
-      my $ref_self = \$weak_self;
-      $self->{'model_ids'} =
-        [$model->signal_connect(row_changed   =>\&_do_row_changed,  $ref_self),
-         $model->signal_connect(row_inserted  =>\&_do_row_inserted, $ref_self),
-         $model->signal_connect(row_deleted   =>\&_do_row_deleted,  $ref_self),
-         $model->signal_connect(rows_reordered=>\&_do_rows_reordered,$ref_self)
-        ];
-    }
-  }
-  if (($pname eq 'model' && ($oldval||0) != ($newval||0))
-      || $pname eq 'fixed_height_mode' && $oldval && ! $newval) {
-    # Any model change, or turning off fixed height mode.
-    $self->queue_resize;
+      my $ref_weak_self = \$weak_self;
 
-    # When turning fixed height mode on there's no need for a resize; the
-    # size we have is based on all rows and assuming the first row is truely
-    # representative then its size is the same as what we've got already.
+      require Glib::Ex::SignalIds;
+      Glib::Ex::SignalIds->new
+          ($model,
+           $model->signal_connect(row_changed    => \&_do_row_changed,
+                                  $ref_weak_self),
+           $model->signal_connect(row_inserted   => \&_do_row_inserted,
+                                  $ref_weak_self),
+           $model->signal_connect(row_deleted    => \&_do_row_deleted,
+                                  $ref_weak_self),
+           $model->signal_connect(rows_reordered => \&_do_rows_reordered,
+                                  $ref_weak_self))
+        };
+
+    $self->queue_resize;
   }
+
+  if ($pname eq 'fixed_height_mode' && $oldval && ! $newval) {
+    # Resize when turning fixed height mode "off" so as to have a look at
+    # all the rows beyond the first.
+    #
+    # Don't resize when turning fixed height mode "on"; the size we have is
+    # based on all rows and assuming the first row is truely representative
+    # then its size is the same as what we've got already.
+    #
+    $self->queue_resize;
+  }
+
   if ($pname eq 'model' || $pname eq 'run' || $pname eq 'frame_rate') {
-    if ($pname eq 'frame_rate') { _stop_timer ($self); }  # new period
+    if ($pname eq 'frame_rate') {
+      _stop_timer ($self);  # ready for new period
+    }
     _update_timer ($self);
   }
   $self->queue_draw;
@@ -758,7 +786,7 @@ sub INIT_INSTANCE {
   $self->{'want_index'}  = 0;
   $self->{'want_x'}      = 0;
   $self->{'drawn_index'} = -1;
-  $self->{'visibility_state'} = 'initial';
+  $self->{'visibility_state'}  = 'initial';
   $self->{'run'}               = 1; # default yes
   $self->{'frame_rate'}        = DEFAULT_FRAME_RATE;
   $self->{'speed'}             = DEFAULT_SPEED;
@@ -795,22 +823,11 @@ sub _do_unrealize {
   _update_timer ($self);
 }
 
-sub _disconnect_model {
-  my ($self, $model) = @_;
-  if (my $model_ids = delete $self->{'model_ids'}) {
-    foreach my $id (@$model_ids) {
-      if (DEBUG) { print "$self model disconnect $id\n"; }
-      $model->signal_handler_disconnect ($id);
-    }
-  }
-}
-
 sub FINALIZE_INSTANCE {
   my ($self) = @_;
   if (my $id = delete $self->{'scroll_idle_id'}) {
     Glib::Source->remove ($id);
   }
-  _disconnect_model ($self, $self->{'model'});
 }
 
 1;
@@ -832,7 +849,7 @@ Gtk2::Ex::TickerView -- scrolling ticker display widget
 =head1 WIDGET HIERARCHY
 
 C<Gtk2::Ex::TickerView> is a subclass of C<Gtk2::DrawingArea>, but that
-might change so it's recommended you only rely on C<Gtk2::Widget>.
+might change so it's recommended you rely only on C<Gtk2::Widget>.
 
     Gtk2::Widget
       Gtk2::DrawingArea
@@ -840,6 +857,7 @@ might change so it's recommended you only rely on C<Gtk2::Widget>.
 
 The interfaces implemented are:
 
+    Gtk2::Buildable
     Gtk2::CellLayout
 
 =head1 DESCRIPTION
@@ -859,34 +877,34 @@ example you can use C<Gtk2::CellRendererText>.
 If two or more renderers are set then they're drawn one after the other for
 each item, ie. row of the model.  For example you could have a
 C<Gtk2::CellRendererPixbuf> to draw an icon then a C<Gtk2::CellRendererText>
-to draw some text and they scroll across together.  (The icon could use the
-model's data, or be just a fixed blob to go before every item.)
+to draw some text and they scroll across together.  The icon could use the
+model's data, or be just a fixed image to go before every item.
 
-The display and scrolling direction follow the widget text direction of the
-C<set_direction> method in L<Gtk2::Widget>.  For C<ltr> mode item 0 starts
-at the left of the window and items scroll to the left.  For C<rtl> item 0
-starts at the right of the window and items scroll to the right.
+The display and scrolling direction follow the text C<set_direction> (see
+L<Gtk2::Widget>).  For C<ltr> mode item 0 starts at the left of the window
+and items scroll to the left.  For C<rtl> item 0 starts at the right of the
+window and items scroll to the right.
 
     +----------------------------------------------------------+
     | m five  * item four  * item three  * item two  * item on |
     +----------------------------------------------------------+
                         right to left mode, scrolling ----->
 
-Any text or drawing direction within each cell renderers is a matter for
-them.  For example in C<Gtk2::CellRendererText> Pango recognises
-right-to-left scripts such as Arabic based on the utf-8 characters and
-shouldn't need any special setups.
+Any text or drawing direction within each cell is a matter for the
+renderers.  For example in C<Gtk2::CellRendererText> Pango recognises
+right-to-left scripts such as Arabic based on the characters and shouldn't
+need any special setups.
 
 Currently only a list style model is expected, meaning only a single level,
 and only that topmost level of the model is drawn.  So for example a
 C<Gtk2::ListStore> suits.  Perhaps in the future something will be done to
-descend into and draw child rows too.
+descend into and draw subrows too.
 
 The whole Gtk model/view/layout/renderer/attributes as used here is
 ridiculously complicated.  Its power comes when showing a big updating list
 or wanting customized drawing, but the amount of code to get something on
 the screen is not nice.  Have a look at "Tree and List Widget Overview" in
-the Gtk reference manual if you haven't already, then F<examples/simple.pl>
+the Gtk reference manual if you haven't already.  Then F<examples/simple.pl>
 in the TickerView sources is more or less the minimum to actually display
 something.
 
@@ -897,20 +915,22 @@ something.
 =item C<< Gtk2::Ex::TickerView->new (key => value, ...) >>
 
 Create and return a new C<Gtk2::Ex::TickerView> widget.  Optional key/value
-pairs can be given to set initial properties as per
-C<< Glib::Object->new >>.
+pairs set initial properties as per C<< Glib::Object->new >> (see
+L<Glib::Object>).
 
 =item C<< $ticker->scroll_pixels ($n) >>
 
 Scroll the ticker contents across by C<$n> pixels.  Postive C<$n> moves in
-the normal scrolled direction or a negative value goes backwards.  C<$n>
-doesn't have to be an integer, the display position is maintained as a
-floating point value.
+the normal scrolled direction or a negative value goes backwards.
+
+C<$n> doesn't have to be an integer, the display position is maintained as a
+floating point value, allowing fractional amounts to accumulate until a
+whole pixel step is reached.
 
 =item C<< $ticker->scroll_to_start () >>
 
-Scroll the ticker contents back to the start, ie. the first row in the
-model.
+Scroll the ticker contents back to the start, ie. to show the first row in
+the model at the left edge of the display (or right for C<rtl>).
 
 =back
 
@@ -920,15 +940,15 @@ model.
 
 =item C<model> (object implementing C<Gtk2::TreeModel>, default undef)
 
-This is any object implementing the C<Gtk2::TreeModel> interface, for
-example a C<Gtk2::ListStore>.  It supplies the data to be displayed.  Until
-this is set the ticker is blank.
+This is any C<Glib::Object> implementing the C<Gtk2::TreeModel> interface,
+for example a C<Gtk2::ListStore>.  It supplies the data to be displayed.
+Until this is set the ticker is blank.
 
-=item C<run> (boolean, default 1)
+=item C<run> (boolean, default true)
 
 Whether to run the ticker, ie. to scroll it across the screen under a timer.
 If false then the ticker just draws the items at its current position,
-without moving (except by the programatic scroll calls above, or user
+without moving (except by the programatic scroll functions above, or user
 dragging with mouse button 1).
 
 =item C<speed> (floating point pixels per second, default 25)
@@ -944,8 +964,7 @@ C<speed> divided by C<frame-rate> many pixels.)
 
 If true then assume all rows in the model have the same height.  This means
 the ticker can ask its renderers about just one row from the model, instead
-of going through all of them.  If the model is big this makes size
-negotiation with the ticker's container parent much faster.
+of going through all of them.  If the model is big this is much faster.
 
 =back
 
@@ -956,16 +975,16 @@ C<set_direction> methods (see L<Gtk2::Widget>).
 The C<visible> property in each cell renderer is recognised and a renderer
 that's not visible is skipped and takes no space.  Each C<visible> can be
 set globally in the renderer to suppress it entirely, or controlled with the
-attributes mechanism or data setup function to suppress it just for selected
+attributes mechanism or data setup func to suppress it just for selected
 items from the model.
 
 =head1 BUILDABLE
 
-C<Gtk2::Ex::TickerView> implements the C<Gtk2::Buildable> interface so
-C<Gtk2::Builder> can be used to construct a TickerView.  The class name is
-C<Gtk2__Ex__TickerView> and renderers and attributes are added as per
-C<GtkCellLayout>.  Here's an example, or see F<examples/builder.pl> in the
-C<Gtk2::Ex::TickerView> sources for a complete program,
+C<Gtk2::Ex::TickerView> implements the C<Gtk2::Buildable> interface,
+allowing C<Gtk2::Builder> to construct a TickerView.  The class name is
+C<Gtk2__Ex__TickerView> and renderers and attributes are added as children
+per C<Gtk2::CellLayout>.  Here's a sample, or see F<examples/builder.pl> in
+the TickerView sources for a complete program,
 
     <object class="Gtk2__Ex__TickerView" id="myticker">
       <property name="model">myliststore</property>
@@ -986,29 +1005,61 @@ This is good to go back and see something that's just moved off the edge, or
 to skip past boring bits.  Perhaps in the future the button used will be
 customizable.
 
-Some care is taken with drawing for scrolling.  If unobscured then scrolling
-uses "CopyArea" and a draw of just the balance at the end.  To avoid
-hammering the X server any further scroll waits until hearing from the
-server that the last completed (a NoExpose event normally).  If partly
-obscured then alas plain full redraws must be used, though working
-progressively by cell to reduce flashing.  Avoidance of hammering is left up
-to C<queue_draw> in that case.  The effect of all this is probably only
-noticeable if your C<frame-rate> is a bit too high or the server is lagged
-by other operations.
+Some care is taken drawing for scrolling.  If unobscured then scrolling uses
+"CopyArea" and a draw of just the balance at the end.  To avoid hammering
+the X server any further scroll waits until hearing from the server that the
+last completed (a NoExpose event normally).  If partly obscured then alas
+plain full redraws must be used, though working progressively by cell to
+reduce flashing.  Avoiding hammering is left up to C<queue_draw> in that
+case.  The effect of all this is probably only noticeable if your
+C<frame-rate> is a bit too high or the server is lagged by other operations.
 
-Scroll steps are always spun through an idle handler too, at roughly
+Scroll moves are always spun through an idle handler too, at roughly
 C<GDK_PRIORITY_REDRAW> priority since they represent redraws, the aim being
-to collapse multiple MotionNotify events from a user drag or multiple
+to collapse multiple MotionNotify events from a user drag, or multiple
 programmatic C<scroll_pixels> calls from slack application code.
 
-The Gtk reference documentation for C<GtkCellLayout> doesn't have a
-description of exactly how C<pack_start> and C<pack_end> end up ordering
-cells, but it's the same as C<GtkBox> and a description can be found there.
-Basically each cell is noted as "start" or "end", the starts are drawn from
-the left, the ends are drawn from the right.  In C<Gtk2::Ex::TickerView> the
-ends immediately follow the starts (there's no gap in between, unlike say in
-a C<Gtk2::HBox>).
+The Gtk reference documentation for C<GtkCellLayout> doesn't describe
+exactly how C<pack_start> and C<pack_end> order cells, but it's the same as
+C<GtkBox> and a description can be found there.  Basically each cell is
+noted as "start" or "end", the starts are drawn from the left, the ends are
+drawn from the right.  In a TickerView the ends immediately follow the
+starts, there's no gap in between, unlike say in a C<Gtk2::HBox>.  See
+F<examples/order.pl> for a demonstration.
+
+When the model has no rows the TickerView has a desired height of zero.
+This is a pest if you want a visible but blank area when there's nothing to
+display.  But there's no way the TickerView can work out a height when it's
+got no data at all to set the renderers.  You might like to try calculating
+a fixed size from a dummy model and use C<set_size_request> to force the
+height, or alternately have a "no data" row in the model instead of letting
+it go empty, or even switch to a dummy model with a "no data" row when the
+real one is empty.
 
 =head1 SEE ALSO
 
-L<Gtk2::CellLayout>, L<Gtk2::TreeModel>, L<Gtk2::CellRenderer>
+L<Gtk2::CellLayout>, L<Gtk2::TreeModel>, L<Gtk2::CellRenderer>,
+L<Gtk2::Ex::CellLayout::Base>
+
+=head1 HOME PAGE
+
+L<http://www.geocities.com/user42_kevin/gtk2-ex-tickerview/index.html>
+
+=head1 LICENSE
+
+Copyright 2007, 2008 Kevin Ryde
+
+Gtk2-Ex-TickerView is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by the
+Free Software Foundation; either version 3, or (at your option) any later
+version.
+
+Gtk2-Ex-TickerView is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+more details.
+
+You should have received a copy of the GNU General Public License along with
+Gtk2-Ex-TickerView.  If not, see L<http://www.gnu.org/licenses/>.
+
+=cut

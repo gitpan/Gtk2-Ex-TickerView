@@ -27,7 +27,8 @@ CellRenderers are used to draw allowing lots of styles or custom
 drawing.  Left-to-right and right-to-left display and scrolling are
 both supported.
 
-The only prerequisite is Gtk2-Perl.  The TickerView home page is
+The prerequisites are Gtk2-Perl and my Gtk2-Ex-CellLayout-Base and
+Glib-Ex-ObjectBits helpers.  The TickerView home page is
 
     http://www.geocities.com/user42_kevin/gtk2-ex-tickerview/index.html
 

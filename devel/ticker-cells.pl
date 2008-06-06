@@ -59,10 +59,10 @@ if (0) {
                                            );
     my $menu = $ticker->menu;
     $ticker->signal_connect (destroy => sub {
-                               print "ticker destroy signal\n";
+                               print __FILE__,": ticker destroy signal\n";
                              });
     $menu->signal_connect (destroy => sub {
-                             print "menu destroy signal\n";
+                             print __FILE__,": menu destroy signal\n";
                            });
   }
   Gtk2->main;
@@ -76,10 +76,10 @@ my $ticker = Gtk2::Ex::TickerView->new (model => $model,
                                        );
 $ticker->pack_start ($renderer, 1);
 $ticker->set_attributes ($renderer, text => 0);
-print "ticker initial flags: ", $ticker->flags,"\n";
+print __FILE__,": ticker initial flags: ", $ticker->flags,"\n";
 
 $ticker->signal_connect (direction_changed => sub {
-                           print "ticker direction changed\n";
+                           print __FILE__,": ticker direction changed\n";
                          });
 
 if (1) {
@@ -99,14 +99,14 @@ if (0) {
      });
 }
 $ticker->signal_connect (destroy => sub {
-                           print "ticker destroy signal\n";
+                           print __FILE__,": ticker destroy signal\n";
                          });
 $right_vbox->pack_start ($ticker, 0,0,0);
 
 if (0) {
   my $menu = $ticker->menu;
   $menu->signal_connect (destroy => sub {
-                           print "menu destroy signal\n";
+                           print __FILE__": menu destroy signal\n";
                          });
   require Gtk2::Ex::CheckMenuItem::Property;
   my $item = Gtk2::Ex::CheckMenuItem::Property->new_with_label ('Foo');
@@ -149,6 +149,15 @@ if (0) {
   $button->signal_connect (toggled => sub {
                              $ticker->set (fixed_height_mode
                                            => $button->get_active);
+                           });
+  $left_vbox->pack_start ($button, 0, 0, 0);
+}
+{
+  my $button = Gtk2::CheckButton->new_with_label ('Forced Height');
+  $button->signal_connect (toggled => sub {
+                             $ticker->set (height_request
+                                           => $button->get_active
+                                           ? 50 : -1);
                            });
   $left_vbox->pack_start ($button, 0, 0, 0);
 }

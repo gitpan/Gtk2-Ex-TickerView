@@ -17,6 +17,8 @@
 # You should have received a copy of the GNU General Public License along
 # with Gtk2-Ex-TickerView.  If not, see <http://www.gnu.org/licenses/>.
 
+use strict;
+use warnings;
 use ExtUtils::MakeMaker;
 
 WriteMakefile
@@ -30,15 +32,18 @@ WriteMakefile
    PREREQ_PM    => {
                     # need 1.180 or higher to be able to implement
                     # Gtk2::CellLayout as a GInterface
-                    Gtk2 => 1.180,
+                    'Gtk2' => '1.180',
 
-                    # need version 2 for its Gtk2::Buildable support
-                    Gtk2::Ex::CellLayout::Base => 2,
+                    # want version 2 for its Gtk2::Buildable support
+                    'Gtk2::Ex::CellLayout::Base' => 2,
 
-                    # actually Gtk2 requires perl 5.8, which has List::Util
+                    # my Glib-Ex-ObjectBits
+                    'Glib::Ex::SignalIds' => 0,
+
+                    # in fact Gtk2 requires perl 5.8 which has List::Util
                     # and Scalar::Util builtin already
-                    List::Util => 0,
-                    Scalar::Util => 0,
+                    'List::Util' => 0,
+                    'Scalar::Util' => 0,
                    },
    clean        => { FILES => "TickerView.html" },
   );
@@ -50,6 +55,7 @@ sub MY::postamble {
 lint:
 	perl -MO=Lint lib/Gtk2/Ex/TickerView.pm
 	podchecker lib/Gtk2/Ex/TickerView.pm
+	perlcritic -1 lib/Gtk2/Ex/TickerView.pm
 
 myman:
 	mv MANIFEST MANIFEST.old
@@ -58,7 +64,10 @@ myman:
 
 TickerView.html: lib/Gtk2/Ex/TickerView.pm Makefile
 	-perl -MPod::Simple::HTML -e Pod::Simple::HTML::go \
-	  lib/Gtk2/Ex/TickerView.pm >TickerView.html
+	  lib/Gtk2/Ex/TickerView.pm \
+	| sed 's!http://search.cpan.org/perldoc?Glib%3A%3A\([^"]*\)!http://gtk2-perl.sourceforge.net/doc/pod/Glib/\1.html!' \
+	| sed 's!http://search.cpan.org/perldoc?Gtk2%3A%3A\([^"%]*\)"!http://gtk2-perl.sourceforge.net/doc/pod/Gtk2/\1.html"!' \
+	 >TickerView.html
 
 # find files in the dist with mod times this year, but without this year in
 # the copyright line

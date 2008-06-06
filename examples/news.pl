@@ -100,7 +100,7 @@ $ticker->set_attributes ($renderer2, markup => 0);
 sub timer_callback {
   my $str = strftime ("* News time <tt>%H:%M:%S</tt>", localtime(time()));
   $liststore->set_value ($liststore->get_iter_first, 0, $str);
-  return 1; # continue
+  return 1; # continue timer
 }
 timer_callback();                            # initial time display
 Glib::Timeout->add (1000, \&timer_callback); # periodic updates
