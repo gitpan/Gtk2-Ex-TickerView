@@ -34,6 +34,9 @@ WriteMakefile
                     # Gtk2::CellLayout as a GInterface
                     'Gtk2' => '1.180',
 
+                    # whatever version Gtk2 demands
+                    'Glib' => 0,
+
                     # want version 2 for its Gtk2::Buildable support
                     'Gtk2::Ex::CellLayout::Base' => 2,
 
@@ -44,6 +47,11 @@ WriteMakefile
                     # and Scalar::Util builtin already
                     'List::Util' => 0,
                     'Scalar::Util' => 0,
+
+                    # and for the devel/ directory development programs
+                    #
+                    # Glib::Ex::ConnectProperties
+                    # Devel::StackTrace
                    },
    clean        => { FILES => "TickerView.html" },
   );
@@ -52,22 +60,24 @@ WriteMakefile
 sub MY::postamble {
   return <<'MAKE_FRAG';
 
-lint:
-	perl -MO=Lint lib/Gtk2/Ex/TickerView.pm
-	podchecker lib/Gtk2/Ex/TickerView.pm
-	perlcritic -1 lib/Gtk2/Ex/TickerView.pm
-
-myman:
-	mv MANIFEST MANIFEST.old
-	touch SIGNATURE
-	(make manifest 2>&1; diff -u MANIFEST.old MANIFEST) |less
-
 TickerView.html: lib/Gtk2/Ex/TickerView.pm Makefile
 	-perl -MPod::Simple::HTML -e Pod::Simple::HTML::go \
 	  lib/Gtk2/Ex/TickerView.pm \
 	| sed 's!http://search.cpan.org/perldoc?Glib%3A%3A\([^"]*\)!http://gtk2-perl.sourceforge.net/doc/pod/Glib/\1.html!' \
 	| sed 's!http://search.cpan.org/perldoc?Gtk2%3A%3A\([^"%]*\)"!http://gtk2-perl.sourceforge.net/doc/pod/Gtk2/\1.html"!' \
 	 >TickerView.html
+
+myman:
+	mv MANIFEST MANIFEST.old
+	touch SIGNATURE
+	(make manifest 2>&1; diff -u MANIFEST.old MANIFEST) |less
+
+CHECKFILES = $(TO_INST_PM) t/*.t examples/*.pl devel/*.pl
+lint:
+	for i in $(CHECKFILES); do perl -MO=Lint $$i; done
+	podchecker    $(CHECKFILES)
+pc:
+	perlcritic $(CHECKFILES)
 
 # find files in the dist with mod times this year, but without this year in
 # the copyright line

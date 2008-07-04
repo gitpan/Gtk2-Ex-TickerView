@@ -15,7 +15,8 @@
 # You should have received a copy of the GNU General Public License along
 # with Gtk2-Ex-TickerView.  If not, see <http://www.gnu.org/licenses/>.
 
-
+use strict;
+use warnings;
 use Test::More tests => 32;
 
 use Gtk2::Ex::TickerView;

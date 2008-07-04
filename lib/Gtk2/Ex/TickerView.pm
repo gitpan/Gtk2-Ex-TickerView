@@ -19,33 +19,35 @@ package Gtk2::Ex::TickerView;
 use strict;
 use warnings;
 use Carp;
+use List::Util qw(min max);
+use POSIX qw(DBL_MAX);
+use Time::HiRes;
+
 use Glib;
 # 1.180 for Gtk2::CellLayout interface and for working $region->get_clipbox
 use Gtk2 1.180;
-use List::Util qw(min max);
-use POSIX qw(DBL_MAX);
+
+use Gtk2::Ex::SyncCall;
 use Gtk2::Ex::CellLayout::Base 2;  # version 2 for Gtk2::Buildable
 use base 'Gtk2::Ex::CellLayout::Base';
 
-our $VERSION = 4;
+our $VERSION = 5;
 
 # set this to 1 for some diagnostic prints, or 2 for even more prints
 use constant DEBUG => 0;
+
 
 use constant {
   DEFAULT_FRAME_RATE => 4,     # times per second
   DEFAULT_SPEED      => 30,    # pixels per second
 };
 
-# not wrapped as of gtk2-perl version 1.181
-use constant GTK_PRIORITY_REDRAW => (Glib::G_PRIORITY_HIGH_IDLE + 20);
-
 use Glib::Object::Subclass
   Gtk2::DrawingArea::,
   interfaces => [ 'Gtk2::CellLayout', 'Gtk2::Buildable' ],
   signals => { expose_event            => \&_do_expose_event,
-               no_expose_event         => \&_do_no_expose_event,
                size_request            => \&_do_size_request,
+               size_allocate           => \&_do_size_allocate,
                button_press_event      => \&_do_button_press_event,
                motion_notify_event     => \&_do_motion_notify_event,
                button_release_event    => \&_do_button_release_event,
@@ -54,6 +56,9 @@ use Glib::Object::Subclass
                map                     => \&_do_map,
                unmap                   => \&_do_unmap,
                unrealize               => \&_do_unrealize,
+               notify                  => \&_do_notify,
+               state_changed           => \&_do_state_changed,
+               style_set               => \&_do_style_set,
              },
   properties => [Glib::ParamSpec->object
                  ('model',
@@ -93,57 +98,165 @@ use Glib::Object::Subclass
                   Glib::G_PARAM_READWRITE),
                  ];
 
-#------------------------------------------------------------------------------
-# generic helpers
+# The private fields are:
+#
+# pixmap
+#     a Gtk2::Gdk::Pixmap established in _pixmap(), or undef until then
+#
+# draw_x
+#     The $x position within 'pixmap' to draw at x=0 in the widget window,
+#     or undef when a full redraw of the pixmap is needed.
+#
+# row_widths
+#     Hash of { $index => $width } which is the width of each row (the total
+#     width of all the renderers).
+#
+#     This is a hash instead of an array with the idea that maybe only some
+#     of the most recently used row sizes will be kept when the model is
+#     very big.  But there's no code to turfing out aging sizes yet, and
+#     doing so could be tricky if there's a lot of zero-width rows that
+#     ought to be retained to be skipped when working out sizes and
+#     positions.
+#
+# drawn
+#     Hash of { $index => $x } where $x is the position in 'pixmap' where
+#     row $index has been drawn, or the leftmost of that row if it's been
+#     drawn more than once.
+#
+#     This is a hash instead of an array since generally only a small set of
+#     index positions in a big model will be on-screen at any given time.
+#
+# want_x, want_index
+#     want_index is the desired row number (counting from 0) to be shown at
+#     the start of the ticker window.  want_x is an x position where the
+#     left edge of the want_index row should start.  This is zero or
+#     negative, negative being when the want_index item is partly off the
+#     left edge.
+#
+#     want_x becomes a bigger negative than the want_index row width during
+#     scrolling.  _forward_scroll() looks for that and increments want_index
+#     to move up.
+#
+#     want_x can go positive when scrolled backwards.  _back_scroll()
+#     decrements want_index to work back to what should then become the new
+#     left edge item.
+#
+# pixmap_x, pixmap_index
+#     The x/index which is the start of the pixmap.  Will have pixmap_x <= 0
+#     similar to want_x.  At a redraw pixmap_x,pixmap_index are set to
+#     want_x,want_index.
+#
+# pixmap_end_x, pixmap_end_index
+#     The x/index just after the last drawn part of the pixmap.  Or
+#     pixmap_end_x is the pixmap width when full.
+#
+#     The pixmap starts with only content that there's a window width worth
+#     starting at the draw_x position.  As that draw_x position increases by
+#     scrolling more is drawn at pixmap_end_x by _extend_pixmap().
+#
+#     The "undrawn" area from pixmap_end_x onwards is always cleared to the
+#     background colour by _redraw_pixmap(), so _extend_pixmap can just
+#     draw.  Although some of that area might never be used, the idea is to
+#     do a single big XDrawRectangle instead of several small ones.
+#
+# visibility_state
+#     A GdkVisibilityState enum string, or 'initial' initially, maintained
+#     from 'visiblity-notify-event's.  When 'fully-obscured' the scroll
+#     timer is suppressed.
+#
+# drag_x
+#     The last x position of the mouse in widget coordinates during a drag,
+#     or undef when not in a drag.
+#
+# In RtoL mode all the x positions are measured from the right edge of the
+# window or pixmap.  Only the expose and the cell renderer drawing must
+# mirror those RtoL logical position into LtoR screen coordinates.
+#
 
-# Return a procedure to be called $func->($index,$width), designed to
-# protect against every $index having a zero $width.
-#
-# It returns true until it sees $index==0 and then $index==0 a second time,
-# with every call (every $index value) having $width==0.  The idea is that
-# the ticker has looped around all the way from zero back to zero and seen
-# every $width equal to zero then it should bail out.
-#
-# Any non-zero $width seen makes the returned procedure always return true.
-# It might be just a single index position out of thousands, but that's
-# enough.
-#
-sub _make_all_zeros_proc {
-  my $seen_nonzero = 0;
-  my $count_index_zero = 0;
-  return sub {
-    my ($index, $width) = @_;
-    if ($width != 0) { $seen_nonzero = 1; }
-    if ($index == 0) { $count_index_zero++; }
-    return (! $seen_nonzero) && ($count_index_zero >= 2);
+sub INIT_INSTANCE {
+  my ($self) = @_;
+  $self->set_double_buffered (0);
+  $self->{'want_index'}  = 0;
+  $self->{'want_x'}      = 0;
+  $self->{'row_widths'} = {};
+  $self->{'drawn'} = {};
+  $self->{'visibility_state'}  = 'initial';
+  $self->{'run'}               = 1; # default yes
+  $self->{'frame_rate'}        = DEFAULT_FRAME_RATE;
+  $self->{'speed'}             = DEFAULT_SPEED;
+  $self->{'fixed_height_mode'} = 0; # default no
+  
+  $self->add_events (['visibility-notify-mask',
+                      'button-press-mask',
+                      'button-motion-mask',
+                      'button-release-mask']);
+}
+
+sub FINALIZE_INSTANCE {
+  my ($self) = @_;
+  _stop_timer ($self);
+}
+
+sub SET_PROPERTY {
+  my ($self, $pspec, $newval) = @_;
+  my $pname = $pspec->get_name;
+  my $oldval = $self->{$pname};
+  $self->{$pname} = $newval;  # per default GET_PROPERTY
+  if (DEBUG) { print "$self set $pname  ",
+                 defined $newval ? $newval : '[undef]', "\n"; }
+
+  if ($pname eq 'model') {
+    if (($oldval||0) == ($newval||0)) { return; }
+    my $model = $newval;
+
+    $self->{'model_ids'} = $model && do {
+      my $weak_self = $self;
+      Scalar::Util::weaken ($weak_self);
+      my $ref_weak_self = \$weak_self;
+
+      require Glib::Ex::SignalIds;
+      Glib::Ex::SignalIds->new
+          ($model,
+           $model->signal_connect (row_changed    => \&_do_row_changed,
+                                   $ref_weak_self),
+           $model->signal_connect (row_inserted   => \&_do_row_inserted,
+                                   $ref_weak_self),
+           $model->signal_connect (row_deleted    => \&_do_row_deleted,
+                                   $ref_weak_self),
+           $model->signal_connect (rows_reordered => \&_do_rows_reordered,
+                                   $ref_weak_self))
+        };
+
+    %{$self->{'row_widths'}} = ();
+    $self->queue_resize;
+  }
+
+  if ($pname eq 'fixed_height_mode' && $oldval && ! $newval) {
+    # Resize when turning fixed height mode "off" so as to have a look at
+    # all the rows beyond the first.
+    #
+    # Don't resize when turning fixed height mode "on" since the size we
+    # have is based on all rows and if the first row is truely
+    # representative then its size is the same as what we've got already.
+    #
+    $self->queue_resize;
+  }
+
+  if ($pname eq 'model' || $pname eq 'run' || $pname eq 'frame_rate') {
+    if ($pname eq 'frame_rate') {
+      _stop_timer ($self);  # ready for new period
+    }
+    _update_timer ($self);
   }
 }
 
-# return a new Gtk2::Gdk::Rectangle which is the intersection of $rect with
-# $region, or return undef if no intersection at all
-sub _rect_intersect_region {
-  my ($rect, $region) = @_;
-  if ($region->rect_in ($rect) eq 'out') { return undef; }
-
-  $region = $region->copy;
-  $region->intersect (Gtk2::Gdk::Region->rectangle ($rect));
-  return $region->get_clipbox;
-}
-
-# do a window clear on the given $region
-sub _window_clear_region {
-  my ($win, $region) = @_;
-  foreach my $rect ($region->get_rectangles) {
-    $win->clear_area ($rect->x, $rect->y, $rect->width, $rect->height);
-  }
-}
 
 #------------------------------------------------------------------------------
 
 # 'size_request' class closure
 sub _do_size_request {
   my ($self, $req) = @_;
-  if (DEBUG) { print "size_request $self\n"; }
+  if (DEBUG) { print "TickerView size_request\n"; }
 
   my $want_height = 0;
   if (my $model = $self->{'model'}) {
@@ -170,32 +283,478 @@ sub _do_size_request {
   $req->height ($want_height);
 }
 
+# 'size_allocate' class closure
+#
+# This is also reached for cell renderer and attribute changes through
+# $self->queue_resize in CellLayout::Base.
+#
+# The _drag_scroll updates to keep the contents at the same position under
+# the mouse during a drag.  Unfortunately some flashing occurs because the
+# server moves the contents with the window then we redraw back to an
+# un-moved position.  Hopefully a window move during a drag is fairly
+# unusual, so it's good enough for now.
+#
+# For a move without a resize the pixmap at its current size could be
+# retained.  Probably moves alone won't occur often enough to make that
+# worth worrying about.
+#
+sub _do_size_allocate {
+  my ($self, $alloc) = @_;
+  if (DEBUG) { print "TickerView size_allocate\n"; }
+  $self->signal_chain_from_overridden ($alloc);
+
+  if ($self->is_drag_active) {
+    my ($x, $y) = $self->get_pointer;
+    _drag_scroll ($self, $x);
+  }
+  $self->{'draw_x'} = undef; # force redraw
+  $self->{'pixmap'} = undef; # new size
+  $self->queue_draw;
+}
+
+
+#------------------------------------------------------------------------------
+# drawing, incl programmatic scrolls
+
+sub _do_expose_event {
+  my ($self, $event) = @_;
+  if (DEBUG >= 2) { print "TickerView expose ",$event->count,"\n"; }
+
+  my $x = $self->{'draw_x'};
+  if (! defined $x) {
+    _redraw_pixmap ($self);
+    $x = $self->{'draw_x'};
+  }
+
+  my $pixmap = $self->{'pixmap'};
+  if ($self->get_direction eq 'rtl') {
+    my ($pix_width, undef) = $pixmap->get_size;
+    $x = $pix_width - 1 - $self->allocation->width - $x;
+  }
+
+  my $gc = $self->get_style->black_gc;  # any old gc for an XCopyArea
+  my $win = $self->window;
+  my ($win_width, $win_height) = $win->get_size;
+  my $clip_region = $event->region;
+
+  $gc->set_clip_region ($clip_region);
+  $win->draw_drawable ($gc, $pixmap,
+                       $x,0,  # src
+                       0,0,   # dst
+                       $win_width, $win_height);
+  $gc->set_clip_region (undef);
+  return 0; # propagate event
+}
+
+sub _pixmap {
+  my ($self) = @_;
+  return ($self->{'pixmap'} ||= do {
+    my $alloc = $self->allocation;
+    my $win_width = $alloc->width;
+    my $win_height = $alloc->height;
+    my $screen_width = $self->get_screen->get_width;
+    my $pix_width = max ($win_width * 2, int ($screen_width / 2));
+    if (DEBUG) { print "  create pixmap ${pix_width}x${win_height}\n"; }
+    Gtk2::Gdk::Pixmap->new ($self->window, $pix_width, $win_height, -1);
+  });
+}
+
+sub _redraw_pixmap {
+  my ($self) = @_;
+  if (DEBUG) { print "  _redraw_pixmap for ",
+                 $self->{'want_index'},",",$self->{'want_x'},"\n"; }
+
+  my $pixmap = _pixmap($self);
+  my ($pix_width, $pix_height) = $pixmap->get_size;
+  my $gc = $self->get_style->bg_gc ($self->state);
+  $pixmap->draw_rectangle ($gc, 1, 0,0, $pix_width,$pix_height);
+  %{$self->{'drawn'}} = ();
+
+  _normalize_want ($self);
+  my $want_index = $self->{'want_index'};
+  my $want_x = $self->{'want_x'};
+  $self->{'pixmap_index'} = $want_index;
+  $self->{'pixmap_x'} = $want_x;
+  $self->{'pixmap_end_index'} = $want_index;
+  $self->{'pixmap_end_x'} = $want_x;
+  $self->{'draw_x'} = 0;
+
+  _extend_pixmap ($self, $self->allocation->width);
+}
+
+sub _extend_pixmap {
+  my ($self, $target_x) = @_;
+  if (DEBUG >= 2) { print "  _extend_pixmap to $target_x\n"; }
+
+  my $x = $self->{'pixmap_end_x'};
+  if ($x >= $target_x) { return; } # if target already covered
+
+  my $pixmap = _pixmap($self);
+  my ($pix_width, $pix_height) = $pixmap->get_size;
+
+  my $model = $self->{'model'};
+  if (! $model) {
+    if (DEBUG) { print "$self no model to draw\n"; }
+  EMPTY:
+    $self->{'pixmap_end_x'} = $pix_width;
+    return;
+  }
+
+  my $cellinfo_list = $self->{'cellinfo_list'};
+  if (! @$cellinfo_list) {
+    if (DEBUG) { print "$self no cell renderers to draw with\n"; }
+    goto EMPTY;
+  }
+  # order the cells per their "pack_start" or "pack_end"
+  $cellinfo_list = [ grep ({$_->{'pack'} eq 'start'} @$cellinfo_list),
+                     reverse grep {$_->{'pack'} eq 'end'} @$cellinfo_list ];
+
+  my $all_zeros = _make_all_zeros_proc();
+  my $ltor = ($self->get_direction eq 'ltr');
+  my $row_widths = $self->{'row_widths'};
+  my $drawn = $self->{'drawn'};
+
+  my $index = $self->{'pixmap_end_index'};
+  my $iter = $model->iter_nth_child (undef, $index);
+
+  for (;;) {
+    if (! $iter) {
+      $index = 0;
+      $iter = $model->get_iter_first;
+      if (! $iter) {
+        if (DEBUG) { print "  model has no rows\n"; }
+        $x = $pix_width;
+        last;
+      }
+    }
+
+    $self->_set_cell_data ($iter);
+
+    $drawn->{$index} ||= $x;
+    my $row_width = 0;
+    foreach my $cellinfo (@$cellinfo_list) {
+      my $cell = $cellinfo->{'cell'};
+      if (! $cell->get('visible')) { next; }
+
+      my ($x_offset, $y_offset, $width, $height)
+        = $cell->get_size ($self, undef);
+
+      my $rect = Gtk2::Gdk::Rectangle->new
+        ($ltor ? $x : $pix_width - 1 - $x - $width,
+         0,
+         $width, $pix_height);
+      $cell->render ($pixmap, $self, $rect, $rect, $rect, []);
+      $x += $width;
+      $row_width += $width;
+    }
+    $row_widths->{$index} = $row_width;
+    if (DEBUG >= 2) { print "  pixmap $index at ",$x-$row_width,
+                        " width $row_width\n"; }
+
+    if ($all_zeros->($index, $row_width)) {
+      if (DEBUG) { print "$self all cell widths on all rows are zero\n"; }
+      $self->{'want_x'} = 0;
+      $x = $pix_width;
+      last;
+    }
+
+    $index++;
+    if ($x >= $target_x) { last; }  # stop when target covered
+    $iter = $model->iter_next ($iter);
+  }
+
+  $self->{'pixmap_end_x'} = min ($x, $pix_width);
+  $self->{'pixmap_end_index'} = $index;
+  if (DEBUG >= 2) { print "    extended to $index,$x\n"; }
+}
+
+sub _move_pixmap {
+  my ($self) = @_;
+  if (DEBUG >= 2) { print "_move_pixmap ",
+                      $self->{'want_index'},",",$self->{'want_x'},"\n"; }
+  if (! $self->{'model'}) { return; }
+
+  if (! defined $self->{'draw_x'}) { # need redraw flag
+  REDRAW:
+    if (DEBUG >= 2) { print "  redraw\n"; }
+    _redraw_pixmap ($self);
+
+  EXPOSE:
+    if ($self->drawable) { # visible (ie. 'show'n) and mapped
+      $self->queue_draw;
+      $self->window->process_updates (1);
+    }
+    return;
+  }
+
+  _normalize_want ($self);
+  my $want_index = $self->{'want_index'};
+  my $want_index_drawn = $self->{'drawn'}->{$want_index};
+  if (! defined $want_index_drawn) {
+    goto REDRAW;
+  }
+  if (DEBUG >= 2) { print "  index $want_index at $want_index_drawn\n"; }
+
+  my $want_x = POSIX::floor ($self->{'want_x'});
+  my $draw_x = $want_index_drawn - $want_x;
+  if ($draw_x == $self->{'draw_x'}) {
+    return;  # not moved at all
+  }
+  if ($draw_x < 0) {
+    # pixmap starts too far into first cell for desired draw position
+    goto REDRAW;
+  }
+  if (DEBUG >= 2) { print "  draw_x want $draw_x\n"; }
+  $self->{'draw_x'} = $draw_x;
+
+  my $want_pixmap_end_x = $draw_x + $self->allocation->width;
+  if (DEBUG >= 2) { print "  pixmap_end_x got ", $self->{'pixmap_end_x'},
+                      " want ", $want_pixmap_end_x, "\n"; }
+  if ($want_pixmap_end_x <= $self->{'pixmap_end_x'}) {
+    # draw_x fits within currently drawn pixmap contents
+    goto EXPOSE;
+  }
+
+  my $pixmap = _pixmap($self);
+  my ($pixmap_width, $pixmap_height) = $pixmap->get_size;
+
+  if ($want_pixmap_end_x > $pixmap_width) {
+    # not enough room in pixmap to extend
+    goto REDRAW;
+  }
+
+  _extend_pixmap ($self, $want_pixmap_end_x);
+  goto EXPOSE;
+}
+
+sub _normalize_want {
+  my ($self) = @_;
+  if ($self->{'want_x'} > 0) {
+    goto &_back_scroll;
+  } else {
+    goto &_forward_scroll;
+  }
+}
+
+sub _forward_scroll {
+  my ($self) = @_;
+
+  my $x = $self->{'want_x'};
+  my $index = $self->{'want_index'};
+  my $row_width = _row_width ($self, $index);
+  if ($x == 0 || $x + $row_width > 0) { return; }
+
+  if (DEBUG >= 2) { print "  scroll forward from $x,$index\n"; }
+  my $model = $self->{'model'} or return;
+  my $all_zeros = _make_all_zeros_proc();
+  my $iter = $model->iter_nth_child (undef, $index);
+
+  for (;;) {
+    $x += $row_width;
+    $index++;
+
+    if (DEBUG >= 2) { print "    row width $row_width to $x,$index \n"; }
+    $iter = $model->iter_next ($iter);
+    if (! $iter) {
+      $index = 0;
+      $iter = $model->get_iter_first;
+      if (! $iter) {
+        if (DEBUG) { print "  model has no rows\n"; }
+        $x = 0;
+        last;
+      }
+    }
+
+    $row_width = _row_width ($self, $index, $iter);
+    if ($all_zeros->($index, $row_width)) {
+      if (DEBUG) { print "    all zeros\n"; }
+      $self->{'want_x'} = 0;
+      return;
+    }
+    if ($x + $row_width > 0) { last; }
+  }
+  
+  $self->{'want_x'} = $x;
+  $self->{'want_index'} = $index;
+}
+
+# If a backwards scroll has moved the starting offset into the window,
+# ie. x>0, then decrement $index enough to be x<=0.
+#
+sub _back_scroll {
+  my ($self) = @_;
+
+  my $x = $self->{'want_x'};
+  # if ($x <= 0) { return; }
+  if (DEBUG) { print "$self back up for negative scroll\n"; }
+
+  my $model = $self->{'model'} or return;
+  my $index = $self->{'want_index'};
+  my $all_zeros = _make_all_zeros_proc();
+
+  do {
+    $index--;
+    if ($index < 0) {
+      $index = max (0, $model->iter_n_children(undef) - 1);
+    }
+    my $row_width = _row_width ($self, $index);
+    if ($all_zeros->($index, $row_width)) {
+      if (DEBUG) { print "$self all cell widths on all rows are zero\n"; }
+      $x = 0;
+      last;
+    }
+    $x -= $row_width;
+  } while ($x > 0);
+  
+  $self->{'want_x'} = $x;
+  $self->{'want_index'} = $index;
+}
+
+# return the width in pixels of row $index
+# $iter is an iterator for $index, or undef to get one
+sub _row_width {
+  my ($self, $index, $iter) = @_;
+
+  my $row_widths = $self->{'row_widths'};
+  my $row_width = $row_widths->{$index};
+  if (! defined $row_width) {
+    if (! defined $iter) {
+      my $model = $self->{'model'};
+      $iter = $model && $model->iter_nth_child (undef, $index);
+      if (! defined $iter) {
+        if (DEBUG) { print "  _row_width index $index out of range\n"; }
+        return 0;
+      }
+    }
+    $self->_set_cell_data ($iter);
+
+    $row_width = 0;
+    foreach my $cellinfo (@{$self->{'cellinfo_list'}}) {
+      my $cell = $cellinfo->{'cell'};
+      if (! $cell->get('visible')) { next; }
+      my (undef, undef, $width, undef) = $cell->get_size ($self, undef);
+      $row_width += $width;
+    }
+    $row_widths->{$index} = $row_width;
+    if (DEBUG) { print "  calc row width $index is $row_width\n"; }
+  }
+  return $row_width;
+}
+
+sub scroll_to_start {
+  my ($self) = @_;
+  _scroll_to_pos ($self, 0, 0);
+}
+
+sub scroll_pixels {
+  my ($self, $pixels) = @_;
+  _scroll_to_pos ($self, $self->{'want_x'} - $pixels, $self->{'want_index'});
+}
+
+sub _scroll_to_pos {
+  my ($self, $x, $index) = @_;
+  if (DEBUG >= 2) { print "scroll_to_pos offset $x index $index\n"; }
+
+  my $prev_index = $self->{'want_index'};
+  $self->{'want_index'} = $index;
+  $self->{'want_x'} = $x;
+
+  $self->{'sync_call'} ||= do {
+    my $weak_self = $self;
+    Scalar::Util::weaken ($weak_self);
+    Gtk2::Ex::SyncCall->sync ($self, \&_sync_call_handler, \$weak_self);
+  };
+}
+sub _sync_call_handler {
+  my ($ref_weak_self) = @_;
+  my $self = $$ref_weak_self or return;
+  if (DEBUG >= 2) { print "TickerView sync call\n"; }
+
+  $self->{'sync_call'} = undef;
+  _move_pixmap ($self);
+}
+
+
+#------------------------------------------------------------------------------
+# drawing style changes
+
+# 'direction_changed' class closure
+# There's no chain_from_overridden here because the GtkWidget code (as of
+# gtk 2.12) in gtk_widget_direction_changed() does a queue_resize, which we
+# don't need or want.
+sub _do_direction_changed {
+  my ($self, $prev_dir) = @_;
+  $self->{'draw_x'} = undef;
+  $self->queue_draw;
+}
+
+# 'notify' class closure
+sub _do_notify {
+  my ($self, $pspec) = @_;
+  my $pname = $pspec->get_name;
+  if (DEBUG) { print "TickerView notify '$pname'\n"; }
+
+  if ($pname eq 'sensitive') {
+    # gtk_widget_set_sensitive has already done $self->queue_draw, so just
+    # need to invalidate pixmap contents here
+    $self->{'draw_x'} = undef;
+  }
+  $self->signal_chain_from_overridden ($pspec);
+}
+
+# 'state_changed' class closure
+sub _do_state_changed {
+  my ($self, $state) = @_;
+  if (DEBUG) { print "TickerView state changed '$state'\n"; }
+  $self->{'draw_x'} = undef;
+  $self->signal_chain_from_overridden ($state);
+}
+
+# 'style_set' class closure
+sub _do_style_set {
+  my ($self, $prev_style) = @_;
+  if (DEBUG) { print "TickerView style-set"; }
+  $self->{'draw_x'} = undef;
+  $self->signal_chain_from_overridden ($prev_style);
+}
+
+
 #------------------------------------------------------------------------------
 # scroll timer
 
-sub _do_timer {
-  my ($ref_weak_self) = @_;
+# not wrapped as of gtk2-perl version 1.183
+use constant GDK_PRIORITY_REDRAW => (Glib::G_PRIORITY_HIGH_IDLE + 20);
 
-  # shouldn't see an undef in our weak ref here, because the timer should be
-  # stopped already by _do_unrealize in the course of widget destruction,
-  # but if for some reason that hasn't happened then stop the timer now
-  my $self = $$ref_weak_self or return 0; # stop timer
+# TIMER_PRIORITY is below the drawing done at GDK_PRIORITY_EVENTS under the
+# SyncCall so that the current position can go out before making a move to a
+# new position.
+#
+# And try TIMER_PRIORITY below GDK_PRIORITY_REDRAW too, to hopefully
+# cooperate with redrawing of other widgets, letting them go out before
+# moving the ticker.
+#
+use constant TIMER_PRIORITY => (GDK_PRIORITY_REDRAW + 10);
 
-  # during a drag the timer still runs but we suppress motion
-  if (! $self->is_drag_active) {
-    my $step = $self->{'speed'} / $self->{'frame_rate'};
-    $self->scroll_pixels ($step);
-    if (DEBUG >= 2) { print "scroll $step, to ", $self->{'want_x'}, "\n"; }
-  }
-  return 1;  # continue timer
+# gettime() returns a floating point count of seconds since some fixed but
+# unspecified origin time
+#
+# clock_gettime() croaks if there's no such library func, in which case fall
+# back on the hi-res time() for gettime
+#
+# Maybe it'd be worth checking clock_getres() to see it's a decent
+# resolution.  It's conceivable some old implementations might do
+# CLOCK_REALTIME just from the CLK_TCK times() counter, giving only 10
+# millisecond resolution.  That'd be enough for a modest 10 or 20
+# frames/sec, but if attempting say 100 frames on a fast computer for ultra
+# smoothness then higher resolution would be needed.
+#
+sub gettime {
+  return Time::HiRes::clock_gettime (Time::HiRes::CLOCK_REALTIME());
 }
-
-sub _stop_timer {
-  my ($self) = @_;
-  if (my $id = delete $self->{'timer_id'}) {
-    if (DEBUG) { print "$self stop timer $id\n"; }
-    Glib::Source->remove ($id);
-  }
+if (! eval { gettime(); 1 }) {
+  if (DEBUG) { print "TickerView fallback to Time::HiRes::time()\n"; }
+  no warnings;
+  *gettime = \&Time::HiRes::time;
 }
 
 # start or stop the scroll timer according to the various settings
@@ -207,6 +766,7 @@ sub _update_timer {
     && $self->{'visibility_state'} ne 'fully-obscured'
     && $self->{'cellinfo_list'}
     && @{$self->{'cellinfo_list'}}
+    && $self->{'frame_rate'} > 0
     && $self->{'model'}
     && $self->{'model'}->get_iter_first;
 
@@ -222,383 +782,87 @@ sub _update_timer {
 
   if ($want_timer) {
     $self->{'timer_id'} ||= do {
-      my $period = 1000.0 / $self->get('frame-rate');
+      my $period = POSIX::ceil (1000.0 / $self->{'frame_rate'});
+      $self->{'period_seconds'} = $period / 1000.0;
       my $weak_self = $self;
       Scalar::Util::weaken ($weak_self);
-      if (DEBUG) { print "$self start timer\n"; }
-      Glib::Timeout->add ($period, \&_do_timer, \$weak_self);
+      if (DEBUG) { print "$self start timer, $period ms\n"; }
+      $self->{'prev_time'} = gettime();
+      Glib::Timeout->add ($period, \&_do_timer, \$weak_self, TIMER_PRIORITY);
     };
   } else {
-    _stop_timer ($self);
+    goto &_stop_timer;
   }
 }
 
-#------------------------------------------------------------------------------
-
-sub _do_expose_event {
-  my ($self, $event) = @_;
-  if (DEBUG >= 2) { print "$self expose ",$event->count,"\n"; }
-
-  $self->{'scroll_deferred'} = 0;
-  if ($self->{'scroll_in_progress'}) {
-    # An Expose after our XCopyArea means we may have copied an invalidated
-    # region.  An expose and a copy "crossing" like this is unlikely, so
-    # just do a full redraw to ensure it's right.
-    #
-    # A GraphicsExpose from our XCopyArea would be normal and we could just
-    # fill in the uncopied portions, but how to distinguish that?  Gdk seems
-    # to lump both exposes together, or makes you block in
-    # $win->get_graphics_expose (which seems imperfect too actually).
-    # Currently a copy is only done when "unobscured", so there shouldn't be
-    # a GraphicsExpose unless an obscuring window moved over just moments
-    # before.
-    #
-    $self->{'scroll_in_progress'} = 0;
-    $self->queue_draw;
-
-  } else {
-    my $region = $event->region;
-    my $win = $self->window;
-    if (defined $self->{'drawn_x'}
-        && POSIX::floor ($self->{'drawn_x'})
-           != POSIX::floor ($self->{'want_x'})) {
-      # our desired position moved by a scroll (one not yet applied with a
-      # copy or whatever), so clear and draw everything
-      my ($win_width, $win_height) = $win->get_size;
-      my $rect = Gtk2::Gdk::Rectangle->new (0, 0, $win_width, $win_height);
-      if ($region->rect_in ($rect) ne 'in') {
-        # the event specified region doesn't already cover whole window
-        $region = Gtk2::Gdk::Region->rectangle ($rect);
-        # $win->clear;
-      }
-    }
-    _draw_region ($self, $region);
-  }
-  return 0; # propagate event
-}
-
-# return a new iter which is the last child under the given $iter
-# $iter can be undef to get the last top-level
-# if there's no children under $iter the return is undef
-sub _model_iter_last_child {
-  my ($model, $iter) = @_;
-  my $nchildren = $model->iter_n_children ($iter);
-  #  if ($nchildren == 0) { return undef; }
-  return $model->iter_nth_child ($iter, $nchildren - 1);
-}
-
-# return a new iter which is the row preceding the given $iter, and at the
-# same depth as $iter
-# if $iter is the first element at its depth then the return is undef
-sub _model_iter_prev {
-  my ($model, $iter) = @_;
-  my $path = $model->get_path ($iter);
-  if ($path->prev) {
-    return $model->get_iter ($path);
-  } else {
-    return _model_iter_last_child ($model, $model->iter_parent ($iter));
-  }
-}
-
-sub _draw_region {
-  my ($self, $region) = @_;
-
-  my $model = $self->{'model'};
-  if (! $model) {
-    if (DEBUG) { print "$self no model to draw\n"; }
-  CLEAR_REGION:
-    _window_clear_region ($self->window, $region);
-    return;
-  }
-
-  my $cellinfo_list = $self->{'cellinfo_list'};
-  if (! @$cellinfo_list) {
-    if (DEBUG) { print "$self no cell renderers to draw with\n"; }
-    goto CLEAR_REGION;
-  }
-  my $x = POSIX::floor ($self->{'want_x'});
-
-  # order the cells per their "pack_start" or "pack_end"
-  $cellinfo_list = [ grep ({$_->{'pack'} eq 'start'} @$cellinfo_list),
-                     reverse grep {$_->{'pack'} eq 'end'} @$cellinfo_list ];
-
-  my $index = $self->{'want_index'};
-  if ($index != $self->{'drawn_index'}) {
-    if (DEBUG) { print "$self full region for different index: ",
-                   " want $index drawn ", $self->{'drawn_index'}, "\n"; }
-    my $win = $self->window;
-    my ($win_width, $win_height) = $win->get_size;
-    $region = Gtk2::Gdk::Region->rectangle
-      (Gtk2::Gdk::Rectangle->new (0, 0, $win_width, $win_height));
-  }
-
-  # If a backwards scroll has moved the starting offset into the window,
-  # ie. x>0, then decrement $index enough to be x<=0.
-  #
-  if ($x > 0) {
-    if (DEBUG) { print "$self back up for negative scroll\n"; }
-
-    my $all_zeros = _make_all_zeros_proc();
-    do {
-      $index--;
-      if ($index < 0) {
-        $index = max (0, $model->iter_n_children (undef) - 1);
-      }
-      my $iter = $model->iter_nth_child (undef, $index);
-      if (! $iter) {
-        # perhaps index left dodgy by new model
-        $index = 0;
-        $iter = $model->get_iter_first;
-        if (! $iter) {
-          if (DEBUG) { print "$self model has no rows\n"; }
-          goto CLEAR_REGION;
-        }
-      }
-
-      $self->_set_cell_data ($iter);
-      my $total_width = 0;
-      foreach my $cellinfo (@$cellinfo_list) {
-        my $cell = $cellinfo->{'cell'};
-        if (! $cell->get('visible')) { next; }
-        my (undef, undef, $width, undef) = $cell->get_size ($self, undef);
-        $total_width += $width;
-      }
-      if ($all_zeros->($index, $total_width)) {
-        if (DEBUG) { print "$self all cell widths on all rows are zero\n"; }
-        $self->{'want_x'} = $self->{'drawn_x'} = 0;
-        goto CLEAR_REGION;
-      }
-
-      $x -= $total_width;
-      $self->{'drawn_x'} = ($self->{'want_x'} -= $total_width);
-    } while ($x > 0);
-
-    $self->{'want_index'} = $index;
-    $self->{'drawn_index'} = $index;
-  }
-
-  $self->{'drawn_index'} = $index;
-  $self->{'drawn_x'} = $self->{'want_x'};
-
-  my $iter = $model->iter_nth_child (undef, $index);
-  if (! $iter) {
-    # new model might have fewer rows, and perhaps no rows at all
-    if (DEBUG) { print "$self nothing at index $index\n"; }
-    $index = 0;
-    $iter = $model->get_iter_first;
-    if (! $iter) {
-      if (DEBUG) { print "  model has no rows\n"; }
-      goto CLEAR_REGION;
-    }
-  }
-
-  # fresh check because working forwards now (could cross index==0 a second
-  # time without seeing everything)
-  my $all_zeros = _make_all_zeros_proc();
-
-  my $ltor   = $self->get_direction eq 'ltr';
-  my $win    = $self->window;
-  my ($win_width, $win_height) = $win->get_size;
-
-  # in this loop $index is maintained for two reasons,
-  #   - to increment the stored $self->{'want_index'} while $x<=0 to step
-  #     along for a positive scroll (ie. the whole of the current $index is
-  #     off the left of the window)
-  #   - to let &$all_zeros() notice when we've traversed the whole model
-  #     without seeing a non-zero cell width
-  # but $iter is stepped with $model->iter_next in case the model can "go to
-  # next" more efficiently than doing a get_nth_child every time
-  #
-  while ($x < $win_width) {
-    if ($x <= 0) {
-      if (DEBUG >= 2) {
-        print "$self advance to idx=$index/x=$x for positive scroll\n"; }
-      $self->{'want_index'} = $self->{'drawn_index'} = $index;
-      # preserve fraction part
-      $self->{'want_x'} = $self->{'drawn_x'}
-        = $x + $self->{'want_x'} - POSIX::floor ($self->{'want_x'});
-    }
-    my $total_width = 0;
-
-    $self->_set_cell_data ($iter);
-    foreach my $cellinfo (@$cellinfo_list) {
-      my $cell = $cellinfo->{'cell'};
-      if (! $cell->get('visible')) { next; }
-
-      my ($x_offset, $y_offset, $width, $height)
-        = $cell->get_size ($self, undef);
-
-      if ($x + $width > 0) { # only once inside the window
-        my $rect = $ltor
-          ? Gtk2::Gdk::Rectangle->new ($x, 0, $width, $win_height)
-            : Gtk2::Gdk::Rectangle->new ($win_width - 1 - $x - $width, 0,
-                                         $width, $win_height);
-        if (my $exposerect = _rect_intersect_region ($rect, $region)) {
-          $win->clear_area ($exposerect->x, $exposerect->y,
-                            $exposerect->width, $exposerect->height);
-          $cell->render ($win, $self, $rect, $rect, $exposerect, []);
-        }
-      }
-      $x += $width;
-      $total_width += $width;
-    }
-    if ($all_zeros->($index, $total_width)) {
-      if (DEBUG) { print "$self all cell widths on all rows are zero\n"; }
-      $self->{'want_x'} = 0;
-      goto CLEAR_REGION;
-    }
-
-    $index++;
-    $iter = $model->iter_next ($iter);
-    if (! $iter) {
-      $index = 0;
-      $iter = $model->get_iter_first;
-      if (! $iter) {
-        if (DEBUG) { print "$self  model has no rows\n"; }
-        goto CLEAR_REGION;
-      }
-    }
-  }
-}
-
-sub _scroll_idle_handler {
+sub _do_timer {
   my ($ref_weak_self) = @_;
-  my $self = $$ref_weak_self;
-  if (! $self) {
-    # weak ref turned to undef -- we ought to have removed this handler in
-    # FINALIZE_INSTANCE, so probably this shouldn't be reached
-    if (DEBUG) {
-      print "TickerView: oops, scroll idle called after weakened to undef\n"; }
-    return 0;  # remove idle
-  }
-  if (DEBUG >= 2) { print "scroll idle\n"; }
-  $self->{'scroll_idle_id'} = 0;  # once only, always removed
+  # shouldn't see an undef in $$ref_weak_self because the timer should be
+  # stopped already by _do_unrealize in the course of widget destruction,
+  # but if for some reason that hasn't happened then stop it now
+  my $self = $$ref_weak_self or return 0; # stop timer
 
-  if ($self->{'scroll_in_progress'}) {
-    $self->{'scroll_deferred'} = 1;
-    return 0;  # remove idle
-  }
-  if ($self->{'want_index'} != $self->{'drawn_index'}
-      || $self->{'visibility_state'} ne 'unobscured'
-      || ! defined $self->{'drawn_x'}) {
-    $self->queue_draw;
-    return 0;  # remove idle
-  }
+  # during a drag the timer still runs but suppress motion
+  if ($self->{'drag_x'}) { return 1; } # continue timer
 
-  my $win = $self->window;
-  if (! $win) {
-    # not realized, so nothing to draw
-    return 0;  # remove idle
-  }
+  my $t = gettime();
+  my $delta = $t - $self->{'prev_time'};
+  $self->{'prev_time'} = $t;
 
-  my $want_x  = POSIX::floor ($self->{'want_x'});
-  my $drawn_x = POSIX::floor ($self->{'drawn_x'});
-  if ($want_x == $drawn_x) {
-    # already drawn in the right spot
-    return 0;  # remove idle
-  }
+  # Watch out for the clock going backwards, don't want to scroll back.
+  # Watch out for jumping wildly forwards due to the process blocked for a
+  # while, don't want to churn through some huge pixel count forwards.
+  $delta = min (10, max (0, $delta));
 
-  my ($win_width, $win_height) = $win->get_size;
-  my $redraw_x = 0;
-  my $redraw_width = $win_width;
-
-  my $step = $drawn_x - $want_x;
-  if (abs ($step) >= $win_width) {
-    # nothing in the window to be retained, use full redraw
-    $self->queue_draw;
-    return 0;  # remove idle
-  }
-
-  $self->{'drawn_x'} = $self->{'want_x'};
-
-  # x measured off the right edge for right-to-left
-  if ($self->get_direction eq 'rtl') {
-    $want_x  = $win_width - 1 - $want_x;
-    $drawn_x = $win_width - 1 - $drawn_x;
-  }
-  my $gc = ($self->{'copy_gc'} ||= do {
-    Gtk2::GC->get ($win->get_depth, $win->get_colormap,
-                   { graphics_exposures => 1 }) });
-  
-  if ($step < 0) {
-    # moving to the right, gap at start
-    $step = -$step;
-    $win->draw_drawable ($gc,
-                         $win, 0,0,  # src
-                         $step,0,    # dst
-                         $win_width-$step, $win_height);
-    $redraw_x = 0;
-  } elsif ($step > 0) {
-    # moving to the left, gap at end
-    $win->draw_drawable ($gc,
-                         $win, $step,0,  # src
-                         0,0,            # dst
-                         $win_width-$step, $win_height);
-    $redraw_x = $win_width - $step;
-  }
-  $redraw_width = $step;
-  $self->{'scroll_in_progress'} = 1;
-
-  if (DEBUG >= 2) { print "  draw $redraw_x width $redraw_width\n"; }
-  # $win->clear;
-  _draw_region ($self,
-                Gtk2::Gdk::Region->rectangle
-                (Gtk2::Gdk::Rectangle->new
-                 ($redraw_x, 0, $redraw_width, $win_height)));
-
-  return 0;  # remove idle
+  my $step = $self->{'speed'} * $delta;
+  $self->scroll_pixels ($step);
+  if (DEBUG >= 2) { print "_do_timer scroll $step to ",
+                      $self->{'want_x'}, "\n"; }
+  return 1;  # continue timer
 }
 
-sub _ensure_scroll_idle {
+sub _stop_timer {
   my ($self) = @_;
-  if ($self->{'scroll_in_progress'}) {
-    $self->{'scroll_deferred'} = 1;
-    return;
-  }
-  $self->{'scroll_idle_id'} ||= do {
-    my $weak_self = $self;
-    Scalar::Util::weaken ($weak_self);
-    Glib::Idle->add (\&_scroll_idle_handler, \$weak_self,
-                     GTK_PRIORITY_REDRAW+1); # just below redraw
-  };
-}
-
-sub _do_no_expose_event {
-  my ($self, $event) = @_;
-  if (DEBUG >= 2) { print "$self no expose",
-                      ($self->{'scroll_deferred'} ? " pending scroll" : ""),
-                      "\n"; }
-  $self->{'scroll_in_progress'} = 0;
-  if ($self->{'scroll_deferred'}) {
-    $self->{'scroll_deferred'} = 0;
-    _ensure_scroll_idle ($self);
+  if (my $id = delete $self->{'timer_id'}) {
+    if (DEBUG) { print "$self stop timer $id\n"; }
+    Glib::Source->remove ($id);
   }
 }
 
-sub _scroll_to_pos {
-  my ($self, $x, $index) = @_;
-  if (DEBUG >= 2) { print "scroll to offset $x index $index inprog ",
-                      $self->{'scroll_in_progress'}||0, "\n"; }
-
-  my $prev_index = $self->{'want_index'};
-  $self->{'want_index'} = $index;
-  $self->{'want_x'} = $x;
-  _ensure_scroll_idle ($self);
-}
-
-sub scroll_pixels {
-  my ($self, $pixels) = @_;
-  _scroll_to_pos ($self, $self->{'want_x'} - $pixels, $self->{'want_index'});
-}
-
-sub scroll_to_start {
+# 'map' class closure
+# (asking the widget to map itself, not the map-event back from the server)
+sub _do_map {
   my ($self) = @_;
-  _scroll_to_pos ($self, 0, 0);
+  # chain before _update_timer(), so the GtkWidget code sets the mapped flag
+  $self->signal_chain_from_overridden;
+  _update_timer ($self);
 }
 
-sub is_drag_active {
+# 'unmap' class closure.
+# (asking the widget to unmap itself, not unmap-event back from the server)
+sub _do_unmap {
   my ($self) = @_;
-  return defined $self->{'drag_x'};
+  if (DEBUG) { print "TickerView unmap\n"; }
+  # chain before _update_timer(), so the GtkWidget code clears the mapped flag
+  $self->signal_chain_from_overridden;
+  _update_timer ($self);
+}
+
+# 'unrealize' class closure
+# (asking the widget to unrealize itself)
+#
+# When a ticker is removed from a container only the unrealize is called,
+# not unmap then unrealize, hence an _update_timer() check here as well as
+# in _do_unmap().
+#
+sub _do_unrealize {
+  my ($self) = @_;
+  # chain before _update_timer(), so the GtkWidget code clears the mapped flag
+  $self->signal_chain_from_overridden;
+
+  $self->{'draw_x'} = undef;
+  $self->{'pixmap'} = undef; # different depth when realized next time
+  _update_timer ($self);
 }
 
 # 'visibility_notify_event' class closure
@@ -610,70 +874,128 @@ sub _do_visibility_notify_event {
   return $self->signal_chain_from_overridden ($event);
 }
 
+
+#------------------------------------------------------------------------------
+# dragging
+#
+# The mouse position for dragging is maintained in widget coordinates, which
+# is the easiest way tot keep the contents anchored to the mouse if the
+# window moves.  (There's no motion_notify for a window move, must recheck
+# the position in _do_size_allocate() above.)
+
+sub is_drag_active {
+  my ($self) = @_;
+  return (defined $self->{'drag_x'});
+}
+
 # 'button_press_event' class closure
 sub _do_button_press_event {
   my ($self, $event) = @_;
+  if (DEBUG >= 2) { print "TickerView button_press ",$event->button,"\n"; }
   if ($event->button == 1) {
     $self->{'drag_x'} = $event->x;
   }
   return $self->signal_chain_from_overridden ($event);
 }
 
-sub _motion_notify_scroll {
-  my ($self, $event) = @_;
-  if ($self->is_drag_active) {
-    my $x = $event->x;
-    my $step = $self->{'drag_x'} - $x;
-    if ($self->get_direction eq 'rtl') { $step = -$step; }
-    $self->scroll_pixels ($step);
-    $self->{'drag_x'} = $x;
-  }
-}
-
 # 'motion_notify_event' class closure
+#
+# is_hint() supports 'pointer-motion-hint-mask' perhaps set by the
+# application or some add-on feature.  Dragging only runs from a mouse
+# button so it's enough to use get_pointer() rather than
+# $display->get_state(), for now.
+#
 sub _do_motion_notify_event {
   my ($self, $event) = @_;
-  _motion_notify_scroll ($self, $event);
+  if (DEBUG >= 2) { print "TickerView motion_notify ",$event->x,
+                      $event->is_hint ? ' hint' : '', "\n"; }
+
+  if (defined $self->{'drag_x'}) {
+    my $x;
+    if ($event->is_hint) {
+      ($x, undef) = $self->get_pointer;
+    } else {
+      $x = $event->x;
+    }
+    _drag_scroll ($self, $x);
+  }
   return $self->signal_chain_from_overridden ($event);
+}
+
+sub _drag_scroll {
+  my ($self, $x) = @_;
+
+  my $step = $self->{'drag_x'} - $x;
+  $self->{'drag_x'} = $x;
+
+  if ($self->get_direction eq 'rtl') { $step = -$step; }
+  $self->scroll_pixels ($step);
 }
 
 # 'button_release_event' class closure
 sub _do_button_release_event {
   my ($self, $event) = @_;
-  if ($event->button == 1) {
-    # final dragged position from X,Y in this release event
-    _motion_notify_scroll ($self, $event);
+  if (DEBUG >= 2) { print "TickerView button_release ",$event->button,"\n"; }
+
+  if (defined $self->{'drag_x'} && $event->button == 1) {
+    # final dragged position from this release event
+    _drag_scroll ($self, $event->x);
     delete $self->{'drag_x'};
   }
   return $self->signal_chain_from_overridden ($event);
 }
 
-# 'map' class closure
-sub _do_map {
+
+#------------------------------------------------------------------------------
+# renderer changes
+
+sub _cellinfo_list_changed {
   my ($self) = @_;
-  $self->signal_chain_from_overridden;
-  _update_timer ($self);
+  %{$self->{'row_widths'}} = ();
+  $self->{'draw_x'} = undef;
+  _update_timer ($self);  # newly empty or non-empty cellinfo list
+  $self->SUPER::_cellinfo_list_changed;
 }
 
-# 'direction_changed' class closure.
-
-# There's no chain_from_overridden here because the GtkWidget code (as of
-# gtk 2.12) in gtk_widget_direction_changed() does a queue_resize, which we
-# don't need or want.
-sub _do_direction_changed {
-  my ($self, $prev_dir) = @_;
-  $self->queue_draw;
+sub _cellinfo_attributes_changed {
+  my ($self) = @_;
+  %{$self->{'row_widths'}} = ();
+  $self->{'draw_x'} = undef;
+  $self->SUPER::_cellinfo_attributes_changed;
 }
+
+
+#------------------------------------------------------------------------------
+# model changes
+#
+# All sorts of updates to the pixmap would be possible instead of redrawing,
+# it's just a question of whether it's worth the trouble.
+#
+# The simplest optimization could be to recognise when an
+# insert/delete/reorder only affects rows outside the drawn pixmap and thus
+# needing nothing except transforming the various index numbers recorded.
+#
 
 sub _do_row_changed {
   my ($model, $path, $iter, $ref_weak_self) = @_;
   my $self = $$ref_weak_self or return;
-  $self->queue_draw;
+  if ($path->get_depth != 0) { return; }  # a sub-row
+  my ($index) = $path->get_indices;
+
+  # recalculate width
+  delete $self->{'row_widths'}->{$index};
+
+  # redraw if changed row displayed in pixmap
+  if (defined $self->{'drawn'}->{$index}) {
+    $self->{'draw_x'} = undef;
+    $self->queue_draw;
+  }
 }
 
 sub _do_row_inserted {
   my ($model, $ins_path, $ins_iter, $ref_weak_self) = @_;
   my $self = $$ref_weak_self or return;
+  if ($ins_path->get_depth != 0) { return; }  # a sub-row
 
   # if inserted before current then advance
   my ($ins_index) = $ins_path->get_indices;
@@ -683,6 +1005,7 @@ sub _do_row_inserted {
                    $self->{'want_index'},"\n"; }
   }
 
+  # if now one row then this insert made it non-empty
   my $newly_nonempty = ! $model->iter_nth_child (undef, 1);
   if ($newly_nonempty) {
     _update_timer ($self);
@@ -691,6 +1014,9 @@ sub _do_row_inserted {
     # become non-empty, or any new row when every row checked for size
     $self->queue_resize;
   }
+
+  %{$self->{'row_widths'}} = ();
+  $self->{'draw_x'} = undef;
   $self->queue_draw;
 }
 
@@ -698,6 +1024,9 @@ sub _do_row_deleted {
   my ($model, $del_path, $ref_weak_self) = @_;
   my $self = $$ref_weak_self or return;
   if (DEBUG) { print "row_deleted, current index ",$self->{'want_index'},"\n";}
+  if ($del_path->get_depth != 0) { return; }  # a sub-row
+
+  %{$self->{'row_widths'}} = ();
 
   # if deleted before current then decrement
   my ($del_index) = $del_path->get_indices;
@@ -712,123 +1041,61 @@ sub _do_row_deleted {
     _update_timer ($self);
   }
   if ($empty || ! $self->{'fixed_height_mode'}) {
-    # become empty, or any delete when every row checked for size
+    # newly empty, or any delete when every row checked for size
     $self->queue_resize;
   }
+
+  %{$self->{'row_widths'}} = ();
+  $self->{'draw_x'} = undef;
   $self->queue_draw;
 }
 
 sub _do_rows_reordered {
   my ($model, $reordered_path, $reordered_iter, $aref, $ref_weak_self) = @_;
   my $self = $$ref_weak_self or return;
+  if ($reordered_path->get_depth != 0) { return; }  # a sub-row
 
   # follow start to new index
-  $self->{'want_index'} = ($aref->[$self->{'want_index'}] || 0);
-  # pessimistic assumption that rest may be different and hence need redraw
+  my $new_want_index = $aref->[$self->{'want_index'}];
+  # be careful of want_index perhaps outside current size (and thus
+  # outside @$arefq)
+  if (defined $new_want_index) {
+    $self->{'want_index'} = $new_want_index;
+  }
+
+  %{$self->{'row_widths'}} = ();
+  $self->{'draw_x'} = undef;
   $self->queue_draw;
 }
 
-sub SET_PROPERTY {
-  my ($self, $pspec, $newval) = @_;
-  my $pname = $pspec->get_name;
-  my $oldval = $self->{$pname};
-  $self->{$pname} = $newval;  # per default GET_PROPERTY
-  if (DEBUG) { print "$self set $pname  ",
-                 defined $newval ? $newval : '[undef]', "\n"; }
 
-  if ($pname eq 'model' && ($oldval||0) != ($newval||0)) {
-    my $model = $newval;
+#------------------------------------------------------------------------------
+# generic helpers
 
-    $self->{'model_ids'} = $model && do {
-      my $weak_self = $self;
-      Scalar::Util::weaken ($weak_self);
-      my $ref_weak_self = \$weak_self;
-
-      require Glib::Ex::SignalIds;
-      Glib::Ex::SignalIds->new
-          ($model,
-           $model->signal_connect(row_changed    => \&_do_row_changed,
-                                  $ref_weak_self),
-           $model->signal_connect(row_inserted   => \&_do_row_inserted,
-                                  $ref_weak_self),
-           $model->signal_connect(row_deleted    => \&_do_row_deleted,
-                                  $ref_weak_self),
-           $model->signal_connect(rows_reordered => \&_do_rows_reordered,
-                                  $ref_weak_self))
-        };
-
-    $self->queue_resize;
-  }
-
-  if ($pname eq 'fixed_height_mode' && $oldval && ! $newval) {
-    # Resize when turning fixed height mode "off" so as to have a look at
-    # all the rows beyond the first.
-    #
-    # Don't resize when turning fixed height mode "on"; the size we have is
-    # based on all rows and assuming the first row is truely representative
-    # then its size is the same as what we've got already.
-    #
-    $self->queue_resize;
-  }
-
-  if ($pname eq 'model' || $pname eq 'run' || $pname eq 'frame_rate') {
-    if ($pname eq 'frame_rate') {
-      _stop_timer ($self);  # ready for new period
-    }
-    _update_timer ($self);
-  }
-  $self->queue_draw;
-}
-
-sub INIT_INSTANCE {
-  my ($self) = @_;
-  $self->set_double_buffered (0);
-  $self->{'want_index'}  = 0;
-  $self->{'want_x'}      = 0;
-  $self->{'drawn_index'} = -1;
-  $self->{'visibility_state'}  = 'initial';
-  $self->{'run'}               = 1; # default yes
-  $self->{'frame_rate'}        = DEFAULT_FRAME_RATE;
-  $self->{'speed'}             = DEFAULT_SPEED;
-  $self->{'fixed_height_mode'} = 0; # default no
-  
-  $self->add_events (['visibility-notify-mask',
-                      'button-press-mask',
-                      'button-motion-mask',
-                      'button-release-mask']);
-  _update_timer ($self);
-}
-
-# 'unmap' class closure.
-sub _do_unmap {
-  my ($self) = @_;
-  if (DEBUG) { print "$self unmap\n"; }
-  # chain before _update_timer(), so the GtkWidget code clears the mapped flag
-  $self->signal_chain_from_overridden;
-  _update_timer ($self);
-}
-
-# 'unrealize' class closure
-# When removed from a container we only get unrealize, not unmap then
-# unrealize, hence an _update_timer check here as well as in _do_unmap().
-sub _do_unrealize {
-  my ($self) = @_;
-  # might need a different depth gc on new window
-  if (my $gc = delete $self->{'copy_gc'}) {
-    if (DEBUG) { print "$self unrealize release $gc\n"; }
-    Gtk2::GC->release ($gc);
-  }
-  # chain before _update_timer(), so the GtkWidget code clears the mapped flag
-  $self->signal_chain_from_overridden;
-  _update_timer ($self);
-}
-
-sub FINALIZE_INSTANCE {
-  my ($self) = @_;
-  if (my $id = delete $self->{'scroll_idle_id'}) {
-    Glib::Source->remove ($id);
+# _make_all_zeros_proc() returns a procedure to be called
+# $func->($index,$width) designed to protect against every $index having a
+# zero $width.
+#
+# $func returns true until it sees an $index==0 and then $index==0 a second
+# time, with every call having $width==0.  The idea is that if the drawing,
+# scrolling, etc, loop has gone all the way around from zero back to zero
+# and all the $width's are equal to zero, then it should bail out.
+#
+# Any non-zero $width seen makes the returned procedure always return true.
+# It might be only a single index position out of thousands, but that's
+# enough.
+#
+sub _make_all_zeros_proc {
+  my $seen_nonzero = 0;
+  my $count_index_zero = 0;
+  return sub {
+    my ($index, $width) = @_;
+    if ($width != 0) { $seen_nonzero = 1; }
+    if ($index == 0) { $count_index_zero++; }
+    return (! $seen_nonzero) && ($count_index_zero >= 2);
   }
 }
+
 
 1;
 __END__
@@ -844,7 +1111,7 @@ Gtk2::Ex::TickerView -- scrolling ticker display widget
                                          ...);
  my $renderer = Gtk2::CellRendererText->new;
  $ticker->pack_start ($renderer, 0);
- $ticker->set_attributes ($renderer, text => 0);  # column
+ $ticker->set_attributes ($renderer, text => 0); # column
 
 =head1 WIDGET HIERARCHY
 
@@ -880,7 +1147,7 @@ C<Gtk2::CellRendererPixbuf> to draw an icon then a C<Gtk2::CellRendererText>
 to draw some text and they scroll across together.  The icon could use the
 model's data, or be just a fixed image to go before every item.
 
-The display and scrolling direction follow the text C<set_direction> (see
+The display and scrolling direction follow C<set_direction> (see
 L<Gtk2::Widget>).  For C<ltr> mode item 0 starts at the left of the window
 and items scroll to the left.  For C<rtl> item 0 starts at the right of the
 window and items scroll to the right.
@@ -921,11 +1188,11 @@ L<Glib::Object>).
 =item C<< $ticker->scroll_pixels ($n) >>
 
 Scroll the ticker contents across by C<$n> pixels.  Postive C<$n> moves in
-the normal scrolled direction or a negative value goes backwards.
+the normal scrolled direction or negative goes backwards.
 
 C<$n> doesn't have to be an integer, the display position is maintained as a
-floating point value, allowing fractional amounts to accumulate until a
-whole pixel step is reached.
+floating point value so fractional amounts can accumulate until a whole
+pixel step is reached.
 
 =item C<< $ticker->scroll_to_start () >>
 
@@ -957,8 +1224,14 @@ The speed the items scroll across, in pixels per second.
 
 =item C<frame-rate> (floating point frames per second, default 4)
 
-The number of times each second the ticker moves and redraws.  (Each move is
-C<speed> divided by C<frame-rate> many pixels.)
+The number of times each second the ticker moves and redraws.  Each move is
+C<speed> divided by C<frame-rate> many pixels.
+
+The current current code uses the Glib main loop timer so the frame rate is
+turned into an integer number of milliseconds for actual use.  (And a
+minimum of 1 millisecond, meaning frame rates more than 1000 are treated as
+1000.  Of course such a rate is pointlessly high, and almost certainly
+unattainable.)
 
 =item C<fixed-height-mode> (boolean, default false)
 
@@ -968,9 +1241,9 @@ of going through all of them.  If the model is big this is much faster.
 
 =back
 
-The text direction giving the display order and scrolling is not a property
-but instead accessed with the usual widget C<get_direction> and
-C<set_direction> methods (see L<Gtk2::Widget>).
+The direction for display order and scrolling is not a property but instead
+accessed with the usual widget C<get_direction> and C<set_direction> methods
+(see L<Gtk2::Widget>).
 
 The C<visible> property in each cell renderer is recognised and a renderer
 that's not visible is skipped and takes no space.  Each C<visible> can be
@@ -1005,36 +1278,41 @@ This is good to go back and see something that's just moved off the edge, or
 to skip past boring bits.  Perhaps in the future the button used will be
 customizable.
 
-Some care is taken drawing for scrolling.  If unobscured then scrolling uses
-"CopyArea" and a draw of just the balance at the end.  To avoid hammering
-the X server any further scroll waits until hearing from the server that the
-last completed (a NoExpose event normally).  If partly obscured then alas
-plain full redraws must be used, though working progressively by cell to
-reduce flashing.  Avoiding hammering is left up to C<queue_draw> in that
-case.  The effect of all this is probably only noticeable if your
-C<frame-rate> is a bit too high or the server is lagged by other operations.
-
-Scroll moves are always spun through an idle handler too, at roughly
-C<GDK_PRIORITY_REDRAW> priority since they represent redraws, the aim being
-to collapse multiple MotionNotify events from a user drag, or multiple
-programmatic C<scroll_pixels> calls from slack application code.
-
-The Gtk reference documentation for C<GtkCellLayout> doesn't describe
-exactly how C<pack_start> and C<pack_end> order cells, but it's the same as
+The Gtk reference documentation for C<GtkCellLayout> doesn't really describe
+how C<pack_start> and C<pack_end> order cells, but it's the same as
 C<GtkBox> and a description can be found there.  Basically each cell is
-noted as "start" or "end", the starts are drawn from the left, the ends are
-drawn from the right.  In a TickerView the ends immediately follow the
-starts, there's no gap in between, unlike say in a C<Gtk2::HBox>.  See
+noted as "start" or "end", with starts drawn from the left and ends from the
+right (vice versa in RtoL mode).  In a TickerView the ends immediately
+follow the starts, there's no gap in between, unlike say in a C<Gtk2::HBox>.
+(Which means the "expand" parameter is ignored currently.)  See
 F<examples/order.pl> for a demonstration.
 
-When the model has no rows the TickerView has a desired height of zero.
-This is a pest if you want a visible but blank area when there's nothing to
-display.  But there's no way the TickerView can work out a height when it's
-got no data at all to set the renderers.  You might like to try calculating
-a fixed size from a dummy model and use C<set_size_request> to force the
-height, or alternately have a "no data" row in the model instead of letting
-it go empty, or even switch to a dummy model with a "no data" row when the
-real one is empty.
+When the model has no rows the TickerView's desired height in
+C<size_request> is zero.  This is no good if you want a visible but blank
+area when there's nothing to display.  But there's no way TickerView can
+work out a height when it's got no data at all to set into the renderers.
+You can try calculating a fixed height from a sample model and
+C<set_size_request> to force that, or alternately have a "no data" row
+displaying in the model instead of letting it go empty, or even switch to a
+dummy model with a "no data" row when the real one is empty.
+
+=head2 Drawing
+
+Cells are drawn into an off-screen pixmap which is copied to the window at
+successively advancing X positions as the ticker scrolls across.  The aim is
+to run the model fetching and cell rendering just once for each row as it
+appears on screen.
+
+Scroll drawing goes through a SyncCall (see L<Gtk2::Ex::SyncCall>) so that
+after drawing one frame the next won't go out until hearing back from the
+server that it's finished drawing the previous.  This ensures a high frame
+rate won't flood the server with more drawing than it can keep up with.
+
+Scroll steps under the timer are calculated on elapsed time
+(C<clock_gettime> realtime when available, or HiRes system time otherwise,
+see L<Time::HiRes>).  This means the apparent motion is still per the
+requested C<speed> property even if the C<frame-rate> is not being achieved
+(either on the client side or due to the server).
 
 =head1 SEE ALSO
 

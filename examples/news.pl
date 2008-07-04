@@ -30,7 +30,7 @@
 
 use strict;
 use warnings;
-use POSIX;  # for strftime()
+use POSIX ();
 use Gtk2 '-init';
 use Gtk2::Ex::TickerView;
 
@@ -98,7 +98,10 @@ $ticker->pack_start ($renderer2, 0);
 $ticker->set_attributes ($renderer2, markup => 0);
 
 sub timer_callback {
-  my $str = strftime ("* News time <tt>%H:%M:%S</tt>", localtime(time()));
+  # note POSIX::strftime is locale bytes, so really ought to recode it to
+  # perl wide-char unicode here, but %H%M%S are only digits
+  my $str = POSIX::strftime ("News time <tt>%H:%M:%S</tt>",
+                             localtime (time()));
   $liststore->set_value ($liststore->get_iter_first, 0, $str);
   return 1; # continue timer
 }

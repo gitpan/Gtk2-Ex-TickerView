@@ -1,9 +1,27 @@
+# Copyright 2007, 2008 Kevin Ryde
+
+# This file is part of Gtk2-Ex-TickerView.
+#
+# Gtk2-Ex-TickerView is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 3, or (at your option) any later
+# version.
+#
+# Gtk2-Ex-TickerView is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+# or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+# for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with Gtk2-Ex-TickerView.  If not, see <http://www.gnu.org/licenses/>.
+
+
 Source: libgtk2-ex-tickerview-perl
 Section: perl
 Priority: optional
 Build-Depends: cdbs, debhelper (>= 4)
 Maintainer: Kevin Ryde <user42@zip.com.au>
-Standards-Version: 3.7.3
+Standards-Version: 3.8.0
 Homepage: http://www.geocities.com/user42_kevin/gtk2-ex-tickerview/index.html
 Bugs: mailto:user42@zip.com.au
 

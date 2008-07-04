@@ -25,3 +25,5 @@ Version 3 - add Gtk2::Buildable
 
 Version 4 - clear window when last model row is deleted
           - use Glib::Ex::SignalIds helper
+
+Version 5 - drawing speedups
