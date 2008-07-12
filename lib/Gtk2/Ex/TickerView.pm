@@ -31,7 +31,7 @@ use Gtk2::Ex::SyncCall;
 use Gtk2::Ex::CellLayout::Base 2;  # version 2 for Gtk2::Buildable
 use base 'Gtk2::Ex::CellLayout::Base';
 
-our $VERSION = 5;
+our $VERSION = 6;
 
 # set this to 1 for some diagnostic prints, or 2 for even more prints
 use constant DEBUG => 0;
@@ -536,6 +536,14 @@ sub _normalize_want {
   }
 }
 
+# Here want_x <= 0 and we're looking to see if the want_index row is
+# entirely off-screen, ie. if want_x + row_width (of that row) would still
+# be want_x <= 0.
+#
+# This is tested on every move/redraw and most of the time the answer is no,
+# we're not ready to step want_index, so the test of $x and cached row_width
+# tries to get out with minimum work.
+#
 sub _forward_scroll {
   my ($self) = @_;
 
@@ -554,7 +562,9 @@ sub _forward_scroll {
     $index++;
 
     if (DEBUG >= 2) { print "    row width $row_width to $x,$index \n"; }
-    $iter = $model->iter_next ($iter);
+    if ($iter) { # undef first time through on empty model
+      $iter = $model->iter_next ($iter);
+    }
     if (! $iter) {
       $index = 0;
       $iter = $model->get_iter_first;
@@ -586,7 +596,7 @@ sub _back_scroll {
 
   my $x = $self->{'want_x'};
   # if ($x <= 0) { return; }
-  if (DEBUG) { print "$self back up for negative scroll\n"; }
+  if (DEBUG) { print "_back_scroll from $x\n"; }
 
   my $model = $self->{'model'} or return;
   my $index = $self->{'want_index'};
@@ -606,6 +616,7 @@ sub _back_scroll {
     $x -= $row_width;
   } while ($x > 0);
   
+  if (DEBUG) { print "  to $x,$index\n"; }
   $self->{'want_x'} = $x;
   $self->{'want_index'} = $index;
 }
@@ -618,6 +629,8 @@ sub _row_width {
   my $row_widths = $self->{'row_widths'};
   my $row_width = $row_widths->{$index};
   if (! defined $row_width) {
+    if (DEBUG) { print "  _row_width on $index ",
+                   defined $iter ? $iter : 'undef', "\n"; }
     if (! defined $iter) {
       my $model = $self->{'model'};
       $iter = $model && $model->iter_nth_child (undef, $index);
@@ -978,8 +991,9 @@ sub _cellinfo_attributes_changed {
 
 sub _do_row_changed {
   my ($model, $path, $iter, $ref_weak_self) = @_;
+  if (DEBUG) { print "TickerView row_changed path=",$path->to_string,"\n"; }
   my $self = $$ref_weak_self or return;
-  if ($path->get_depth != 0) { return; }  # a sub-row
+  if ($path->get_depth != 1) { return; }  # a sub-row
   my ($index) = $path->get_indices;
 
   # recalculate width
@@ -995,7 +1009,7 @@ sub _do_row_changed {
 sub _do_row_inserted {
   my ($model, $ins_path, $ins_iter, $ref_weak_self) = @_;
   my $self = $$ref_weak_self or return;
-  if ($ins_path->get_depth != 0) { return; }  # a sub-row
+  if ($ins_path->get_depth != 1) { return; }  # a sub-row
 
   # if inserted before current then advance
   my ($ins_index) = $ins_path->get_indices;
@@ -1024,7 +1038,7 @@ sub _do_row_deleted {
   my ($model, $del_path, $ref_weak_self) = @_;
   my $self = $$ref_weak_self or return;
   if (DEBUG) { print "row_deleted, current index ",$self->{'want_index'},"\n";}
-  if ($del_path->get_depth != 0) { return; }  # a sub-row
+  if ($del_path->get_depth != 1) { return; }  # a sub-row
 
   %{$self->{'row_widths'}} = ();
 
@@ -1057,8 +1071,8 @@ sub _do_rows_reordered {
 
   # follow start to new index
   my $new_want_index = $aref->[$self->{'want_index'}];
-  # be careful of want_index perhaps outside current size (and thus
-  # outside @$arefq)
+  # check for undef in case want_index is outside current size, and thus
+  # outside @$aref
   if (defined $new_want_index) {
     $self->{'want_index'} = $new_want_index;
   }
@@ -1323,7 +1337,7 @@ L<Gtk2::Ex::CellLayout::Base>
 
 L<http://www.geocities.com/user42_kevin/gtk2-ex-tickerview/index.html>
 
-=head1 LICENSE
+=head1 COPYRIGHT
 
 Copyright 2007, 2008 Kevin Ryde
 

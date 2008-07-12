@@ -54,6 +54,14 @@ WriteMakefile
                     # Devel::StackTrace
                    },
    clean        => { FILES => "TickerView.html" },
+
+   EXTRA_META => <<'HERE',
+no_index:
+    directory:
+        - devel
+resources:
+    homepage: http://www.geocities.com/user42_kevin/gtk2-ex-tickerview/index.html
+HERE
   );
 
 
@@ -72,12 +80,12 @@ myman:
 	touch SIGNATURE
 	(make manifest 2>&1; diff -u MANIFEST.old MANIFEST) |less
 
-CHECKFILES = $(TO_INST_PM) t/*.t examples/*.pl devel/*.pl
+LINT_FILES = $(TO_INST_PM) t/*.t examples/*.pl devel/*.pl
 lint:
-	for i in $(CHECKFILES); do perl -MO=Lint $$i; done
-	podchecker    $(CHECKFILES)
+	for i in $(LINT_FILES); do perl -MO=Lint $$i; done
+	podchecker $(LINT_FILES)
 pc:
-	perlcritic $(CHECKFILES)
+	perlcritic $(LINT_FILES)
 
 # find files in the dist with mod times this year, but without this year in
 # the copyright line

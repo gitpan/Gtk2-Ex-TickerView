@@ -28,8 +28,7 @@ use Gtk2::Ex::TickerView;
 sub exception_handler {
   my ($msg) = @_;
   print __FILE__,": ", $msg;
-  eval { require Devel::StackTrace; };
-  if (! $@) {
+  if (eval { require Devel::StackTrace; 1 }) {
     my $trace = Devel::StackTrace->new;
     print $trace->as_string;
   }
@@ -318,6 +317,16 @@ if (0) {
   $button->signal_connect (clicked => sub {
                              my $rows = $model->iter_n_children (undef);
                              $model->reorder (reverse 0 .. $rows-1);
+                           });
+  $left_vbox->pack_start ($button, 0, 0, 0);
+}
+{
+  my $button = Gtk2::Button->new_with_label ('Change First');
+  $button->signal_connect (clicked => sub {
+                             my $iter = $model->get_iter_first;
+                             my $value = $model->get_value ($iter, 0);
+                             $value .= 'Z';
+                             $model->set ($iter, 0 => $value);
                            });
   $left_vbox->pack_start ($button, 0, 0, 0);
 }

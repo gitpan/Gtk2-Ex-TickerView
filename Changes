@@ -16,14 +16,16 @@ You should have received a copy of the GNU General Public License along
 with Gtk2-Ex-TickerView.  If not, see <http://www.gnu.org/licenses/>.
 
 
-Version 1 - the first version
+Version 6 - fixes for change redraws
 
-Version 2 - Gtk2::CellLayout as an interface using Gtk2::Ex::CellLayout::Base
-          - fixes to fixed-height-mode and packing order
-
-Version 3 - add Gtk2::Buildable
+Version 5 - drawing speedups
 
 Version 4 - clear window when last model row is deleted
           - use Glib::Ex::SignalIds helper
 
-Version 5 - drawing speedups
+Version 3 - add Gtk2::Buildable
+
+Version 2 - Gtk2::CellLayout as an interface using Gtk2::Ex::CellLayout::Base
+          - fixes to fixed-height-mode and packing order
+
+Version 1 - the first version
