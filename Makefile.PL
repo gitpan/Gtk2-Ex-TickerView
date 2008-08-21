@@ -34,24 +34,25 @@ WriteMakefile
                     # Gtk2::CellLayout as a GInterface
                     'Gtk2' => '1.180',
 
-                    # whatever version Gtk2 demands
-                    'Glib' => 0,
-
                     # want version 2 for its Gtk2::Buildable support
                     'Gtk2::Ex::CellLayout::Base' => 2,
 
                     # my Glib-Ex-ObjectBits
                     'Glib::Ex::SignalIds' => 0,
+                    'Glib::Ex::SourceIds' => 0,
 
                     # in fact Gtk2 requires perl 5.8 which has List::Util
                     # and Scalar::Util builtin already
                     'List::Util' => 0,
                     'Scalar::Util' => 0,
 
-                    # and for the devel/ directory development programs
+                    # Extras for the devel/ directory development programs
+                    #   Glib::Ex::ConnectProperties
+                    #   Devel::StackTrace
                     #
-                    # Glib::Ex::ConnectProperties
-                    # Devel::StackTrace
+                    # Optional for the examples/ directory programs
+                    #   Finance::Quote
+                    #
                    },
    clean        => { FILES => "TickerView.html" },
 
@@ -89,7 +90,7 @@ pc:
 
 # find files in the dist with mod times this year, but without this year in
 # the copyright line
-copyright-years-check: $(DISTVNAME).tar.gz
+copyright-years-check:
 	year=`date +%Y`; \
 	tar tvfz $(DISTVNAME).tar.gz \
 	| grep $$year- \
@@ -97,20 +98,24 @@ copyright-years-check: $(DISTVNAME).tar.gz
 	| (result=0; \
 	  while read i; do \
 	    case $$i in \
-	      '' | */ | COPYING | MANIFEST | META.yml | SIGNATURE \
+	      '' | */ \
+	      | debian/changelog | debian/compat | debian/control \
 	      | t/pod.t \
-	      | debian/changelog | debian/compat | debian/control) \
+	      | COPYING | MANIFEST* | SIGNATURE | META.yml) \
 	      continue ;; \
 	    esac; \
 	    if test -e "$(srcdir)/$$i"; then f="$(srcdir)/$$i"; \
 	    else f="$$i"; fi; \
 	    if ! grep -q "Copyright.*$$year" $$f; then \
-	      echo "$$i:1: this file"; \
+	      echo "$$i":"1: this file"; \
 	      grep Copyright $$f; \
 	      result=1; \
 	    fi; \
 	  done; \
 	  exit $$result)
+
+debug-constants-check:
+	if egrep -n 'DEBUG => [^0]' $(TO_INST_PM); then exit 1; else exit 0; fi
 
 diff-prev:
 	rm -rf diff.tmp
@@ -121,6 +126,7 @@ diff-prev:
 	-cd diff.tmp; diff -ur $(NAME)-`expr $(VERSION) - 1` \
 	                       $(NAME)-$(VERSION) >tree.diff
 	-less diff.tmp/tree.diff
+	rm -rf diff.tmp
 
 MAKE_FRAG
 }

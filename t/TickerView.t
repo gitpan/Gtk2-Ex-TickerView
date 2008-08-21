@@ -1,3 +1,5 @@
+#!/usr/bin/perl
+
 # Copyright 2007, 2008 Kevin Ryde
 
 # This file is part of Gtk2-Ex-TickerView.
@@ -17,7 +19,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 32;
+use Test::More tests => 36;
 
 use Gtk2::Ex::TickerView;
 
@@ -111,7 +113,7 @@ ok (Gtk2::Ex::TickerView->VERSION >= 4);
 }
 
 SKIP: {
-  if (! Gtk2->init_check) { skip 'due to no DISPLAY available', 5; }
+  if (! Gtk2->init_check) { skip 'due to no DISPLAY available', 9; }
 
   {
     my $m1 = Gtk2::ListStore->new ('Glib::String');
@@ -120,41 +122,62 @@ SKIP: {
     require Scalar::Util;
     Scalar::Util::weaken ($m1);
     $ticker->set(model => $m2);
-    is ('not defined',
-        defined $m1 ? 'defined' : 'not defined',
-        "shouldn't keep a reference to previous model");
+    is ($m1, undef, "shouldn't keep a reference to previous model");
   }
 
   {
     my $ticker = Gtk2::Ex::TickerView->new;
     Scalar::Util::weaken ($ticker);
-    is ('not defined',
-        defined $ticker ? 'defined' : 'not defined',
-        'garbage collected when weakened - empty');
+    is ($ticker, undef, 'garbage collected when weakened - empty');
   }
   {
     my $store = Gtk2::ListStore->new ('Glib::String');
     my $ticker = Gtk2::Ex::TickerView->new (model => $store);
     Scalar::Util::weaken ($ticker);
-    is ('not defined',
-        defined $ticker ? 'defined' : 'not defined',
-        'garbage collected when weakened - with model');
+    is ($ticker, undef, 'garbage collected when weakened - with model');
   }
   {
     my $store = Gtk2::ListStore->new ('Glib::String');
     my $ticker = Gtk2::Ex::TickerView->new (model => $store);
     $ticker->set (model => undef);
     my $get_model = $ticker->get('model');
-    is ('not defined',
-        defined $get_model ? 'defined' : 'not defined',
-        'unset model from ticker');
+    is ($get_model, undef, 'unset model from ticker');
   }
   {
     my $store = Gtk2::ListStore->new ('Glib::String');
     my $ticker = Gtk2::Ex::TickerView->new (model => $store);
     $ticker->set (model => undef);
     ok (! any_signal_connections ($store),
-       'no signal handlers left on model when unset');
+        'no signal handlers left on model when unset');
+  }
+  {
+    my $ticker = Gtk2::Ex::TickerView->new;
+    my $path = $ticker->get_path_at_pos (0, 0);
+    if ($path) { $path = $path->to_string; }
+    is ($path, undef, "get_path_at_pos when nothing");
+
+    my $store = Gtk2::ListStore->new ('Glib::String');
+    $ticker->set (model => $store);
+    $path = $ticker->get_path_at_pos (0, 0);
+    if ($path) { $path = $path->to_string; }
+    is ($path, undef, "get_path_at_pos when empty and unrealized");
+
+    $ticker->set (model => undef);
+    $store->insert_with_values (0, 0=>'foo');
+    $ticker->set (model => $store);
+    $path = $ticker->get_path_at_pos (0, 0);
+    if ($path) { $path = $path->to_string; }
+    is ($path, '0', "get_path_at_pos when non-empty and unrealized");
+
+    $ticker->set (model => undef);
+    $store->remove ($store->iter_nth_child(undef,0));
+    $ticker->set (model => $store);
+    my $toplevel = Gtk2::Window->new ('toplevel');
+    $toplevel->add ($ticker);
+    $toplevel->show_all;
+    $path = $ticker->get_path_at_pos (0, 0);
+    if ($path) { $path = $path->to_string; }
+    is ($path, undef, "get_path_at_pos when empty and realized");
   }
 }
 

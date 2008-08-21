@@ -16,6 +16,10 @@
 # with Gtk2-Ex-TickerView.  If not, see <http://www.gnu.org/licenses/>.
 
 
+# libglib-ex-objectbits-perl is >= 2 to have Glib::Ex::SourceIds
+# (other dependencies per Makefile.PL)
+
+
 Source: libgtk2-ex-tickerview-perl
 Section: perl
 Priority: optional
@@ -27,7 +31,7 @@ Bugs: mailto:user42@zip.com.au
 
 Package: libgtk2-ex-tickerview-perl
 Architecture: all
-Depends: libgtk2-perl (>= 1.180), libgtk2-ex-celllayout-base-perl (>= 2), libglib-ex-objectbits-perl
+Depends: libgtk2-perl (>= 1.180), libgtk2-ex-celllayout-base-perl (>= 2), libglib-ex-objectbits-perl (>= 2)
 Description: Scrolling ticker or newsbar widget for Gtk2-Perl
  Gtk2::Ex::TickerView displays TreeModel items scrolling horizontally
  like a stock ticker or newsbar.  Drawing is done with CellRenderers,

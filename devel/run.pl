@@ -123,9 +123,28 @@ if (0) {
        $renderer->set('visible', $len != 5);
      });
 }
-$ticker->signal_connect (destroy => sub {
-                           print __FILE__,": ticker destroy signal\n";
-                         });
+$ticker->signal_connect
+  (destroy => sub {
+     print __FILE__,": ticker destroy signal\n";
+   });
+$ticker->signal_connect
+  (button_press_event => sub {
+     print __FILE__,": ticker button press\n";
+     my ($self, $event) = @_;
+     if ($event->button == 3) {
+       my $x = $event->x;
+       my $y = $event->y;
+       my @ret = $ticker->get_path_at_pos ($x, $y);
+       require Data::Dumper;
+       print "  get_path_at_pos($x,$y) ",
+         Data::Dumper::Dumper(\@ret);
+       if (my $path = $ret[0]) {
+         print "  path '",$path->to_string,"'",
+           " elem ",$model->get_value($model->get_iter($path),0),"\n";
+       }
+     }
+     return 0; # propagate event
+   });
 $right_vbox->pack_start ($ticker, 0,0,0);
 
 if (0) {
@@ -428,6 +447,32 @@ my $insert_count = 1;
     ("Item", $renderer, text => 0);
   $column->set (resizable => 1);
   $treeview->append_column ($column);
+}
+
+
+{
+  my $hbox = Gtk2::HBox->new;
+  $right_vbox->pack_start ($hbox, 0,0,0);
+
+  my $button = Gtk2::Button->new_with_label ('Grab Shortly');
+  $hbox->pack_start ($button, 1,1,0);
+
+  my $area = Gtk2::DrawingArea->new;
+  $hbox->pack_start ($area, 1,1,0);
+
+  $button->signal_connect
+    (clicked => sub {
+       Glib::Timeout->add
+           (1500, sub {
+              my $status = Gtk2::Gdk->pointer_grab ($area->window,
+                                                    0,     # owner events
+                                                    [],
+                                                    undef, # confine win
+                                                    undef, # cursor inherited
+                                                    0);    # current time
+              print __FILE__,": grab $status\n";
+            });
+     });
 }
 
 $toplevel->show_all;

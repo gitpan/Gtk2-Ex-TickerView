@@ -10,12 +10,14 @@ devel/clock.pl
 devel/run.pl
 devel/window-move.pl
 examples/builder.pl
+examples/financequote.pl
 examples/news.pl
 examples/order.pl
 examples/simple.pl
 lib/Gtk2/Ex/TickerView.pm
 Makefile.PL
 MANIFEST			This list of files
+MANIFEST.SKIP
 README
 SIGNATURE
 t/pod.t
