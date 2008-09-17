@@ -21,8 +21,8 @@
 # Usage: ./window-move.pl
 #
 # This program moves or resizes a tickerview to see the effect on dragging.
-# (Which currently means some flashing as the move takes the contents with
-# it then the drag puts them back where they were under the mouse.
+# As from TickerView version 7 the contents go with the window and the mouse
+# drags relative to their new position.
 #
 
 use strict;

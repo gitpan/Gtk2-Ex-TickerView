@@ -19,24 +19,23 @@
 
 use strict;
 use warnings;
-use Test::More tests => 36;
-
 use Gtk2::Ex::TickerView;
+use Test::More tests => 36;
 
 # return true if there's any signal handlers connected to $obj
 sub any_signal_connections {
   my ($obj) = @_;
   my @connected = grep {$obj->signal_handler_is_connected ($_)} (0 .. 500);
   if (@connected) {
-    print "$obj signal handlers connected: ",join(' ',@connected),"\n";
+    diag "$obj signal handlers connected: ",join(' ',@connected),"\n";
     return 1;
   }
   return 0;
 }
 
 
-ok ($Gtk2::Ex::TickerView::VERSION >= 4);
-ok (Gtk2::Ex::TickerView->VERSION >= 4);
+ok ($Gtk2::Ex::TickerView::VERSION >= 8);
+ok (Gtk2::Ex::TickerView->VERSION  >= 8);
 
 {
   my $all_zeros = Gtk2::Ex::TickerView::_make_all_zeros_proc();

@@ -37,6 +37,9 @@ WriteMakefile
                     # want version 2 for its Gtk2::Buildable support
                     'Gtk2::Ex::CellLayout::Base' => 2,
 
+                    # my Gtk2-Ex-WidgetBits
+                    'Gtk2::Ex::SyncCall' => 0,
+
                     # my Glib-Ex-ObjectBits
                     'Glib::Ex::SignalIds' => 0,
                     'Glib::Ex::SourceIds' => 0,

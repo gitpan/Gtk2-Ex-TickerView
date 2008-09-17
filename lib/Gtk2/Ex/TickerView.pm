@@ -30,7 +30,7 @@ use Gtk2::Ex::SyncCall;
 use Gtk2::Ex::CellLayout::Base 2;  # version 2 for Gtk2::Buildable
 use base 'Gtk2::Ex::CellLayout::Base';
 
-our $VERSION = 7;
+our $VERSION = 8;
 
 # set this to 1 for some diagnostic prints, or 2 for even more prints
 use constant DEBUG => 0;
@@ -719,7 +719,7 @@ sub _scroll_to_pos {
 }
 sub _sync_call_handler {
   my ($ref_weak_self) = @_;
-  my $self = $$ref_weak_self or return;
+  my $self = $$ref_weak_self || return;
   if (DEBUG >= 2) { print "TickerView sync call\n"; }
 
   $self->{'sync_call'} = undef;
@@ -874,7 +874,7 @@ sub _do_timer {
   # shouldn't see an undef in $$ref_weak_self because the timer should be
   # stopped already by _do_unrealize in the course of widget destruction,
   # but if for some reason that hasn't happened then stop it now
-  my $self = $$ref_weak_self or return 0; # stop timer
+  my $self = $$ref_weak_self || return 0; # stop timer
 
   my $t = _gettime();
   my $delta = $t - $self->{'prev_time'};
@@ -1081,7 +1081,7 @@ sub _cellinfo_attributes_changed {
 sub _do_row_changed {
   my ($model, $path, $iter, $ref_weak_self) = @_;
   if (DEBUG) { print "TickerView row_changed path=",$path->to_string,"\n"; }
-  my $self = $$ref_weak_self or return;
+  my $self = $$ref_weak_self || return;
   if ($path->get_depth != 1) { return; }  # a sub-row
   my ($index) = $path->get_indices;
 
@@ -1097,7 +1097,7 @@ sub _do_row_changed {
 
 sub _do_row_inserted {
   my ($model, $ins_path, $ins_iter, $ref_weak_self) = @_;
-  my $self = $$ref_weak_self or return;
+  my $self = $$ref_weak_self || return;
   if ($ins_path->get_depth != 1) { return; }  # a sub-row
 
   # if inserted before current then advance
@@ -1125,7 +1125,7 @@ sub _do_row_inserted {
 
 sub _do_row_deleted {
   my ($model, $del_path, $ref_weak_self) = @_;
-  my $self = $$ref_weak_self or return;
+  my $self = $$ref_weak_self || return;
   if (DEBUG) { print "row_deleted, current index ",$self->{'want_index'},"\n";}
   if ($del_path->get_depth != 1) { return; }  # a sub-row
 
@@ -1156,7 +1156,7 @@ sub _do_row_deleted {
 # 'rows-reordered' signal on the model
 sub _do_rows_reordered {
   my ($model, $reordered_path, $reordered_iter, $aref, $ref_weak_self) = @_;
-  my $self = $$ref_weak_self or return;
+  my $self = $$ref_weak_self || return;
   if ($reordered_path->get_depth != 0) { return; }  # a sub-row
 
   # $aref[$i] says where the row row used to be, so to make want_index

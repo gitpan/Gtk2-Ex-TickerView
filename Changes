@@ -16,6 +16,9 @@ You should have received a copy of the GNU General Public License along
 with Gtk2-Ex-TickerView.  If not, see <http://www.gnu.org/licenses/>.
 
 
+Version 8, September 2008
+    - forgot Gtk2::Ex::SyncCall dependency in Makefile.PL
+
 Version 7, August 2008
     - new get_path_at_pos()
     - use my Glib::Ex::SourceIds
