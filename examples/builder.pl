@@ -19,9 +19,11 @@
 
 
 # This is an example of making a TickerView in a GUI with Gtk2::Builder.
+# You must have Gtk2-Perl compiled against Gtk 2.12 or newer to use this.
+#
 # The class name is "Gtk2__Ex__TickerView", as usual for Gtk2-Perl package
 # name to Gtk type name conversion.  A cell renderer is added as a "child"
-# of the ticker, with <attributes> to set renderer properties from model
+# of the ticker, with <attributes> to have renderer properties from model
 # columns.
 
 use strict;

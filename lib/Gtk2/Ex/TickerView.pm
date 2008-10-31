@@ -30,7 +30,7 @@ use Gtk2::Ex::SyncCall;
 use Gtk2::Ex::CellLayout::Base 2;  # version 2 for Gtk2::Buildable
 use base 'Gtk2::Ex::CellLayout::Base';
 
-our $VERSION = 8;
+our $VERSION = 9;
 
 # set this to 1 for some diagnostic prints, or 2 for even more prints
 use constant DEBUG => 0;
@@ -43,7 +43,11 @@ use constant {
 
 use Glib::Object::Subclass
   Gtk2::DrawingArea::,
-  interfaces => [ 'Gtk2::CellLayout', 'Gtk2::Buildable' ],
+  interfaces =>
+  [ 'Gtk2::CellLayout',
+    # Gtk2::Buildable is new in Gtk 2.12, omit if not available
+    Gtk2::Widget->isa('Gtk2::Buildable') ? ('Gtk2::Buildable') : () ],
+
   signals => { expose_event            => \&_do_expose_event,
                size_request            => \&_do_size_request,
                size_allocate           => \&_do_size_allocate,
@@ -467,8 +471,7 @@ sub _extend_pixmap {
       my $cell = $cellinfo->{'cell'};
       if (! $cell->get('visible')) { next; }
 
-      my ($x_offset, $y_offset, $width, $height)
-        = $cell->get_size ($self, undef);
+      my (undef, undef, $width, $height) = $cell->get_size ($self, undef);
 
       my $rect = Gtk2::Gdk::Rectangle->new
         ($ltor ? $x : $pix_width - 1 - $x - $width,
@@ -553,7 +556,7 @@ sub _move_pixmap {
   }
 
   my $pixmap = _pixmap($self);
-  my ($pixmap_width, $pixmap_height) = $pixmap->get_size;
+  my ($pixmap_width) = $pixmap->get_size;
 
   if ($want_pixmap_end_x > $pixmap_width) {
     # Not enough room in pixmap to extend.
@@ -707,7 +710,6 @@ sub _scroll_to_pos {
   my ($self, $x, $index) = @_;
   if (DEBUG >= 2) { print "scroll_to_pos offset $x index $index\n"; }
 
-  my $prev_index = $self->{'want_index'};
   $self->{'want_index'} = $index;
   $self->{'want_x'} = $x;
 
@@ -1260,7 +1262,7 @@ might change so it's recommended you only rely on C<Gtk2::Widget>.
 
 The interfaces implemented are:
 
-    Gtk2::Buildable
+    Gtk2::Buildable (Gtk 2.12 and up)
     Gtk2::CellLayout
 
 =head1 DESCRIPTION
@@ -1401,11 +1403,11 @@ the model.
 
 =head1 BUILDABLE
 
-C<Gtk2::Ex::TickerView> implements the C<Gtk2::Buildable> interface,
-allowing C<Gtk2::Builder> to construct a TickerView.  The class name is
-C<Gtk2__Ex__TickerView> and renderers and attributes are added as children
-per C<Gtk2::CellLayout>.  Here's a sample, or see F<examples/builder.pl> in
-the TickerView sources for a complete program,
+C<Gtk2::Ex::TickerView> implements the C<Gtk2::Buildable> interface in Gtk
+2.12 and up, allowing C<Gtk2::Builder> to construct a TickerView.  The class
+name is C<Gtk2__Ex__TickerView> and renderers and attributes are added as
+children per C<Gtk2::CellLayout>.  Here's a sample, or see
+F<examples/builder.pl> in the TickerView sources for a complete program,
 
     <object class="Gtk2__Ex__TickerView" id="myticker">
       <property name="model">myliststore</property>
@@ -1419,8 +1421,8 @@ the TickerView sources for a complete program,
       </child>
     </object>
 
-See L<Gtk2::Ex::CellLayout::Base/BUILDABLE INTERFACE> for caveats about
-widget superclass tags which may end up unavailable.
+However, see L<Gtk2::Ex::CellLayout::Base/BUILDABLE INTERFACE> for caveats
+about widget superclass tags which may end up unavailable.
 
 =head1 OTHER NOTES
 

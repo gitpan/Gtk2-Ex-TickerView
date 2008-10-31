@@ -20,10 +20,12 @@
 
 use strict;
 use warnings;
-use Gtk2 '-init';
-
-use Glib::Ex::ConnectProperties;
 use Gtk2::Ex::TickerView;
+
+use Gtk2 '-init';
+use Glib::Ex::ConnectProperties;
+
+print Gtk2::Ex::TickerView->isa('Gtk2::Buildable')?'yes':'not'," buildable\n";
 
 sub exception_handler {
   my ($msg) = @_;

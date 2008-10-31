@@ -20,7 +20,7 @@
 use strict;
 use warnings;
 use Gtk2::Ex::TickerView;
-use Test::More tests => 36;
+use Test::More tests => 45;
 
 # return true if there's any signal handlers connected to $obj
 sub any_signal_connections {
@@ -34,8 +34,8 @@ sub any_signal_connections {
 }
 
 
-ok ($Gtk2::Ex::TickerView::VERSION >= 8);
-ok (Gtk2::Ex::TickerView->VERSION  >= 8);
+ok ($Gtk2::Ex::TickerView::VERSION >= 9);
+ok (Gtk2::Ex::TickerView->VERSION  >= 9);
 
 {
   my $all_zeros = Gtk2::Ex::TickerView::_make_all_zeros_proc();
@@ -73,6 +73,7 @@ ok (Gtk2::Ex::TickerView->VERSION  >= 8);
 
 {
   my $ticker = Gtk2::Ex::TickerView->new;
+  isa_ok ($ticker, 'Gtk2::Ex::TickerView', 'ticker');
   require Gtk2;
   my $r1 = Gtk2::CellRendererText->new;
   my $r2 = Gtk2::CellRendererText->new;
@@ -97,74 +98,74 @@ ok (Gtk2::Ex::TickerView->VERSION  >= 8);
   $ticker->pack_start ($r1, 0);
   $ticker->pack_start ($r2, 0);
   $ticker->pack_start ($r3, 0);
-
+  
   $ticker->reorder ($r1, 0);
   is_deeply ([$ticker->get_cells], [$r1, $r2, $r3]);
-
+  
   $ticker->reorder ($r1, 1);
   is_deeply ([$ticker->get_cells], [$r2, $r1, $r3]);
-
+  
   $ticker->reorder ($r3, 0);
   is_deeply ([$ticker->get_cells], [$r3, $r2, $r1]);
-
+  
   $ticker->reorder ($r3, 2);
   is_deeply ([$ticker->get_cells], [$r2, $r1, $r3]);
 }
 
+{
+  my $m1 = Gtk2::ListStore->new ('Glib::String');
+  my $m2 = Gtk2::ListStore->new ('Glib::String');
+  my $ticker = Gtk2::Ex::TickerView->new (model => $m1);
+  require Scalar::Util;
+  Scalar::Util::weaken ($m1);
+  $ticker->set(model => $m2);
+  is ($m1, undef, "shouldn't keep a reference to previous model");
+}
+
+{
+  my $ticker = Gtk2::Ex::TickerView->new;
+  Scalar::Util::weaken ($ticker);
+  is ($ticker, undef, 'garbage collected when weakened - empty');
+}
+{
+  my $store = Gtk2::ListStore->new ('Glib::String');
+  my $ticker = Gtk2::Ex::TickerView->new (model => $store);
+  Scalar::Util::weaken ($ticker);
+  is ($ticker, undef, 'garbage collected when weakened - with model');
+}
+{
+  my $store = Gtk2::ListStore->new ('Glib::String');
+  my $ticker = Gtk2::Ex::TickerView->new (model => $store);
+  $ticker->set (model => undef);
+  my $get_model = $ticker->get('model');
+  is ($get_model, undef, 'unset model from ticker');
+}
+{
+  my $store = Gtk2::ListStore->new ('Glib::String');
+  my $ticker = Gtk2::Ex::TickerView->new (model => $store);
+  $ticker->set (model => undef);
+  ok (! any_signal_connections ($store),
+      'no signal handlers left on model when unset');
+}
+
 SKIP: {
-  if (! Gtk2->init_check) { skip 'due to no DISPLAY available', 9; }
+  if (! Gtk2->init_check) { skip 'due to no DISPLAY available', 5; }
 
-  {
-    my $m1 = Gtk2::ListStore->new ('Glib::String');
-    my $m2 = Gtk2::ListStore->new ('Glib::String');
-    my $ticker = Gtk2::Ex::TickerView->new (model => $m1);
-    require Scalar::Util;
-    Scalar::Util::weaken ($m1);
-    $ticker->set(model => $m2);
-    is ($m1, undef, "shouldn't keep a reference to previous model");
-  }
-
-  {
-    my $ticker = Gtk2::Ex::TickerView->new;
-    Scalar::Util::weaken ($ticker);
-    is ($ticker, undef, 'garbage collected when weakened - empty');
-  }
-  {
-    my $store = Gtk2::ListStore->new ('Glib::String');
-    my $ticker = Gtk2::Ex::TickerView->new (model => $store);
-    Scalar::Util::weaken ($ticker);
-    is ($ticker, undef, 'garbage collected when weakened - with model');
-  }
-  {
-    my $store = Gtk2::ListStore->new ('Glib::String');
-    my $ticker = Gtk2::Ex::TickerView->new (model => $store);
-    $ticker->set (model => undef);
-    my $get_model = $ticker->get('model');
-    is ($get_model, undef, 'unset model from ticker');
-  }
-  {
-    my $store = Gtk2::ListStore->new ('Glib::String');
-    my $ticker = Gtk2::Ex::TickerView->new (model => $store);
-    $ticker->set (model => undef);
-    ok (! any_signal_connections ($store),
-        'no signal handlers left on model when unset');
-  }
   {
     my $ticker = Gtk2::Ex::TickerView->new;
     my $path = $ticker->get_path_at_pos (0, 0);
-    if ($path) { $path = $path->to_string; }
-    is ($path, undef, "get_path_at_pos when nothing");
+    is ($path, undef, "get_path_at_pos when no model");
 
     my $store = Gtk2::ListStore->new ('Glib::String');
     $ticker->set (model => $store);
     $path = $ticker->get_path_at_pos (0, 0);
-    if ($path) { $path = $path->to_string; }
-    is ($path, undef, "get_path_at_pos when empty and unrealized");
+    is ($path, undef, "get_path_at_pos when empty model, and unrealized");
 
     $ticker->set (model => undef);
     $store->insert_with_values (0, 0=>'foo');
     $ticker->set (model => $store);
     $path = $ticker->get_path_at_pos (0, 0);
+    isa_ok ($path, 'Gtk2::TreePath');
     if ($path) { $path = $path->to_string; }
     is ($path, '0', "get_path_at_pos when non-empty and unrealized");
 
@@ -178,6 +179,62 @@ SKIP: {
     if ($path) { $path = $path->to_string; }
     is ($path, undef, "get_path_at_pos when empty and realized");
   }
+}
+
+SKIP: {
+  if (! Gtk2::Ex::TickerView->isa('Gtk2::Buildable')) {
+    skip 'due to no Gtk2::Buildable interface', 7;
+  }
+
+  my $builder = Gtk2::Builder->new;
+  $builder->add_from_string (<<'HERE');
+<interface>
+  <object class="Gtk2__Ex__TickerView" id="ticker">
+    <property name="width-request">200</property>
+    <child>
+      <object class="GtkCellRendererText" id="renderer">
+        <property name="xpad">10</property>
+      </object>
+      <attributes>
+        <attribute name="text">0</attribute>
+      </attributes>
+    </child>
+  </object>
+  <object class="GtkCellView" id="cellview">
+    <property name="width-request">200</property>
+    <child>
+      <object class="GtkCellRendererText" id="ren2">
+        <property name="xpad">10</property>
+      </object>
+      <attributes>
+        <attribute name="text">0</attribute>
+      </attributes>
+    </child>
+  </object>
+</interface>
+HERE
+
+  my $ticker = $builder->get_object('ticker');
+  isa_ok ($ticker, 'Gtk2::Ex::TickerView', 'ticker from buildable');
+
+  my $renderer = $builder->get_object('renderer');
+  isa_ok ($renderer, 'Gtk2::CellRendererText', 'renderer from buildable');
+  is_deeply ([ $ticker->GET_CELLS ], [ $renderer ],
+             'GET_CELLS ticker from buildable');
+
+  my $store = Gtk2::ListStore->new ('Glib::String');
+  $ticker->set (model => $store);
+  my $iter = $store->insert_with_values (0, 0=>'foo');
+  $ticker->_set_cell_data ($iter);  # from Gtk2::Ex::CellLayout::Base
+  is ($renderer->get ('text'), 'foo',
+      'renderer from buildable attribute set');
+
+  Scalar::Util::weaken ($builder);
+  Scalar::Util::weaken ($ticker);
+  Scalar::Util::weaken ($renderer);
+  is ($builder,  undef, 'builder weakened');
+  is ($ticker,   undef, 'ticker from buildable weakened');
+  is ($renderer, undef, 'renderer from buildable weakened');
 }
 
 exit 0;

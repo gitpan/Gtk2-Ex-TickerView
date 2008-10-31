@@ -16,6 +16,9 @@ You should have received a copy of the GNU General Public License along
 with Gtk2-Ex-TickerView.  If not, see <http://www.gnu.org/licenses/>.
 
 
+Version 9, October 2008
+    - Gtk2::Buildable is only in new enough Gtk
+
 Version 8, September 2008
     - forgot Gtk2::Ex::SyncCall dependency in Makefile.PL
 
