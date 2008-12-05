@@ -33,9 +33,27 @@ sub any_signal_connections {
   return 0;
 }
 
+diag ("Perl-Gtk2 version ",Gtk2->VERSION);
+diag ("Perl-Glib version ",Glib->VERSION);
+diag ("Compiled against Glib version ",
+      Glib::MAJOR_VERSION(), ".",
+      Glib::MINOR_VERSION(), ".",
+      Glib::MICRO_VERSION(), ".");
+diag ("Running on       Glib version ",
+      Glib::major_version(), ".",
+      Glib::minor_version(), ".",
+      Glib::micro_version(), ".");
+diag ("Compiled against Gtk version ",
+      Gtk2::MAJOR_VERSION(), ".",
+      Gtk2::MINOR_VERSION(), ".",
+      Gtk2::MICRO_VERSION(), ".");
+diag ("Running on       Gtk version ",
+      Gtk2::major_version(), ".",
+      Gtk2::minor_version(), ".",
+      Gtk2::micro_version(), ".");
 
-ok ($Gtk2::Ex::TickerView::VERSION >= 9);
-ok (Gtk2::Ex::TickerView->VERSION  >= 9);
+ok ($Gtk2::Ex::TickerView::VERSION >= 10);
+ok (Gtk2::Ex::TickerView->VERSION  >= 10);
 
 {
   my $all_zeros = Gtk2::Ex::TickerView::_make_all_zeros_proc();
@@ -81,13 +99,16 @@ ok (Gtk2::Ex::TickerView->VERSION  >= 9);
   $ticker->pack_start ($r2, 0);
 
   $ticker->reorder ($r1, 0);
-  is_deeply ([$ticker->get_cells], [$r1, $r2]);
+  is_deeply ([$ticker->GET_CELLS], [$r1, $r2],
+             'reorder 2 no change');
 
   $ticker->reorder ($r1, 1);
-  is_deeply ([$ticker->get_cells], [$r2, $r1]);
+  is_deeply ([$ticker->GET_CELLS], [$r2, $r1],
+             'reorder 2 swap');
 
   $ticker->reorder ($r1, 0);
-  is_deeply ([$ticker->get_cells], [$r1, $r2]);
+  is_deeply ([$ticker->GET_CELLS], [$r1, $r2],
+             'reorder 2 swap back');
 }
 
 {
@@ -100,16 +121,20 @@ ok (Gtk2::Ex::TickerView->VERSION  >= 9);
   $ticker->pack_start ($r3, 0);
   
   $ticker->reorder ($r1, 0);
-  is_deeply ([$ticker->get_cells], [$r1, $r2, $r3]);
+  is_deeply ([$ticker->GET_CELLS], [$r1, $r2, $r3],
+             'reorder 3 no change');
   
   $ticker->reorder ($r1, 1);
-  is_deeply ([$ticker->get_cells], [$r2, $r1, $r3]);
+  is_deeply ([$ticker->GET_CELLS], [$r2, $r1, $r3],
+             'reorder 3 swap first two');
   
   $ticker->reorder ($r3, 0);
-  is_deeply ([$ticker->get_cells], [$r3, $r2, $r1]);
+  is_deeply ([$ticker->GET_CELLS], [$r3, $r2, $r1],
+             'reorder 3 last to first');
   
   $ticker->reorder ($r3, 2);
-  is_deeply ([$ticker->get_cells], [$r2, $r1, $r3]);
+  is_deeply ([$ticker->GET_CELLS], [$r2, $r1, $r3],
+             'reorder 3 first back to last');
 }
 
 {
@@ -233,8 +258,8 @@ HERE
   Scalar::Util::weaken ($ticker);
   Scalar::Util::weaken ($renderer);
   is ($builder,  undef, 'builder weakened');
-  is ($ticker,   undef, 'ticker from buildable weakened');
-  is ($renderer, undef, 'renderer from buildable weakened');
+  is ($ticker,   undef, 'ticker from builder weakened');
+  is ($renderer, undef, 'renderer from builder weakened');
 }
 
 exit 0;

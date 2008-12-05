@@ -24,13 +24,13 @@ use POSIX qw(DBL_MAX);
 use Time::HiRes;
 
 use Glib;
-use Gtk2 1.180; # need 1.180 for Gtk2::CellLayout as an interface
+use Gtk2 '1.180'; # version 1.180 for Gtk2::CellLayout as an interface
 
 use Gtk2::Ex::SyncCall;
 use Gtk2::Ex::CellLayout::Base 2;  # version 2 for Gtk2::Buildable
 use base 'Gtk2::Ex::CellLayout::Base';
 
-our $VERSION = 9;
+our $VERSION = 10;
 
 # set this to 1 for some diagnostic prints, or 2 for even more prints
 use constant DEBUG => 0;
@@ -46,7 +46,8 @@ use Glib::Object::Subclass
   interfaces =>
   [ 'Gtk2::CellLayout',
     # Gtk2::Buildable is new in Gtk 2.12, omit if not available
-    Gtk2::Widget->isa('Gtk2::Buildable') ? ('Gtk2::Buildable') : () ],
+    Gtk2::Widget->isa('Gtk2::Buildable') ? ('Gtk2::Buildable') : ()
+  ],
 
   signals => { expose_event            => \&_do_expose_event,
                size_request            => \&_do_size_request,
@@ -836,6 +837,7 @@ sub _update_timer {
   my ($self) = @_;
 
   my $want_timer = $self->{'run'}
+    && ! $self->{'paused_count'}
     && $self->mapped
     && $self->{'visibility_state'} ne 'fully-obscured'
     && $self->{'cellinfo_list'}
@@ -847,6 +849,7 @@ sub _update_timer {
 
   if (DEBUG) {
     print "$self run=", $self->{'run'},
+      " paused=", ($self->{'paused_count'}||'no'),
       " mapped=",     $self->mapped ? 1 : 0,
       " visibility=", $self->{'visibility_state'},
       " model=",      $self->get('model') || '[none]',
@@ -1237,7 +1240,6 @@ sub get_path_at_pos {
 1;
 __END__
 
-
 =head1 NAME
 
 Gtk2::Ex::TickerView -- scrolling ticker display widget
@@ -1379,8 +1381,8 @@ will be C<speed> divided by C<frame-rate> many pixels.
 The current current code uses the Glib main loop timer so the frame rate is
 turned into an integer number of milliseconds for actual use.  A minimum 1
 millisecond is imposed, meaning frame rates more than 1000 are treated as
-1000.  Of course 1000 frames a second is pointlessly high and almost
-certainly unattainable.
+1000.  Of course 1000 frames a second is pointlessly high and quite likely
+unattainable.
 
 =item C<fixed-height-mode> (boolean, default false)
 

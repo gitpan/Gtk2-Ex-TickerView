@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                Gtk2-Ex-TickerView
-version:             9
+version:             10
 abstract:            Scrolling ticker or newsbar view widget.
 license:             gpl
 author:              

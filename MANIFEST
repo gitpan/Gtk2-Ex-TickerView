@@ -6,6 +6,7 @@ debian/control
 debian/copyright
 debian/rules
 debian/watch
+devel/buildable.pl
 devel/clock-gettime.pl
 devel/run.pl
 devel/window-move.pl
