@@ -25,11 +25,14 @@ use Gtk2::Ex::TickerView;
 use Gtk2 '-init';
 use Glib::Ex::ConnectProperties;
 
+use FindBin;
+my $progname = $FindBin::Script;
+
 print Gtk2::Ex::TickerView->isa('Gtk2::Buildable')?'yes':'not'," buildable\n";
 
 sub exception_handler {
   my ($msg) = @_;
-  print __FILE__,": ", $msg;
+  print "$progname: ", $msg;
   if (eval { require Devel::StackTrace; 1 }) {
     my $trace = Devel::StackTrace->new;
     print $trace->as_string;
@@ -66,10 +69,10 @@ if (0) {
                                            );
     my $menu = $ticker->menu;
     $ticker->signal_connect (destroy => sub {
-                               print __FILE__,": ticker destroy signal\n";
+                               print "$progname: ticker destroy signal\n";
                              });
     $menu->signal_connect (destroy => sub {
-                             print __FILE__,": menu destroy signal\n";
+                             print "$progname: menu destroy signal\n";
                            });
   }
   Gtk2->main;
@@ -88,14 +91,16 @@ HERE
 my $ticker = Gtk2::Ex::TickerView->new (model => $model,
                                         frame_rate => 500,
                                         speed => 500,
-                                        run => 0);
-print __FILE__,": ticker name=", $ticker->get_name || 'undef',
+                                        run => 0,
+                                        orientation => 'vertical',
+                                       );
+print "$progname: ticker name=", $ticker->get_name || 'undef',
   " initial flags: ", $ticker->flags,"\n";
 { my $color = $ticker->get_style->fg('normal');
-  print __FILE__,": ticker fg[NORMAL]: ", $color->to_string, "\n";
+  print "$progname: ticker fg[NORMAL]: ", $color->to_string, "\n";
 }
 { my $color = $ticker->get_style->fg('active');
-  print __FILE__,": ticker fg[ACTIVE]: ", $color->to_string, "\n";
+  print "$progname: ticker fg[ACTIVE]: ", $color->to_string, "\n";
 }
 
 my $renderer = Gtk2::CellRendererText->new;
@@ -127,11 +132,11 @@ if (0) {
 }
 $ticker->signal_connect
   (destroy => sub {
-     print __FILE__,": ticker destroy signal\n";
+     print "$progname: ticker destroy signal\n";
    });
 $ticker->signal_connect
   (button_press_event => sub {
-     print __FILE__,": ticker button press\n";
+     print "$progname: ticker button press\n";
      my ($self, $event) = @_;
      if ($event->button == 3) {
        my $x = $event->x;
@@ -145,14 +150,14 @@ $ticker->signal_connect
            " elem ",$model->get_value($model->get_iter($path),0),"\n";
        }
      }
-     return 0; # propagate event
+     return 0; # Gtk2::EVENT_PROPAGATE
    });
 $right_vbox->pack_start ($ticker, 0,0,0);
 
 if (0) {
   my $menu = $ticker->menu;
   $menu->signal_connect (destroy => sub {
-                           print __FILE__,": menu destroy signal\n";
+                           print "$progname: menu destroy signal\n";
                          });
   require Gtk2::Ex::CheckMenuItem::Property;
   my $item = Gtk2::Ex::CheckMenuItem::Property->new_with_label ('Foo');
@@ -213,7 +218,7 @@ if (0) {
                                $events = $events - 'pointer-motion-hint-mask';
                              }
                              $window->set_events ($events);
-                             print __FILE__,": events $events\n";
+                             print "$progname: events $events\n";
                            });
   $left_vbox->pack_start ($button, 0, 0, 0);
 
@@ -227,7 +232,7 @@ if (0) {
   # is_hint handling in the ticker is doing the right thing, as opposed to
   # the tooltip always doing the server request.
   #
-  print __FILE__,":show-help tooltip ",
+  print "$progname:show-help tooltip ",
     $ticker->signal_emit ('show-help', 'tooltip'), "\n";
 }
 {
@@ -259,7 +264,7 @@ if (0) {
 
   $ticker->signal_connect
     (direction_changed => sub {
-       print __FILE__,": ticker direction changed\n";
+       print "$progname: ticker direction changed\n";
        my $idx = ($ticker->get_direction eq 'ltr' ? 0 : 1);
        $combobox->set_active ($idx);
      });
@@ -287,14 +292,14 @@ if (0) {
   $combobox->signal_connect (changed => sub {
                                my $iter = $combobox->get_active_iter;
                                my $state = $state_model->get_value ($iter,0);
-                               print __FILE__,": set state $state\n";
+                               print "$progname: set state $state\n";
                                $ticker->set_state ($state);
                              });
 
   $ticker->signal_connect
     (state_changed => sub {
        my $state = $ticker->state;
-       print __FILE__,": ticker state changed to $state\n";
+       print "$progname: ticker state changed to $state\n";
        $combobox->set_active ($state_to_index{$state});
      });
 }
@@ -399,7 +404,7 @@ my $insert_count = 1;
 {
   my $button = Gtk2::Button->new_with_label ('Renderers Clear');
   $button->signal_connect (clicked => sub {
-                             print __FILE__,": ticker renderers clear\n";
+                             print "$progname: ticker renderers clear\n";
                              $ticker->clear;
                            });
   $left_vbox->pack_start ($button, 0, 0, 0);
@@ -466,16 +471,23 @@ my $insert_count = 1;
     (clicked => sub {
        Glib::Timeout->add
            (1500, sub {
+              print "$progname: pointer_grab\n";
               my $status = Gtk2::Gdk->pointer_grab ($area->window,
                                                     0,     # owner events
                                                     [],
                                                     undef, # confine win
                                                     undef, # cursor inherited
                                                     0);    # current time
-              print __FILE__,": grab $status\n";
+              print "$progname: grab $status\n";
+              return 0; # Glib::SOURCE_REMOVE
             });
      });
 }
+
+{ my $req = $ticker->size_request;
+  print "$progname: ticker '",$ticker->get('orientation'),"' size_request is ",$req->width,"x",$req->height,"\n";
+}
+$ticker->set_size_request (100,100);
 
 $toplevel->show_all;
 Gtk2->main;

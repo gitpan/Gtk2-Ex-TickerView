@@ -8,13 +8,16 @@ debian/rules
 debian/watch
 devel/buildable.pl
 devel/clock-gettime.pl
+devel/refilter.pl
 devel/run.pl
 devel/window-move.pl
 examples/builder.pl
 examples/financequote.pl
 examples/news.pl
 examples/order.pl
+examples/poe-yahoo-quotes.pl
 examples/simple.pl
+examples/vertical.pl
 lib/Gtk2/Ex/TickerView.pm
 Makefile.PL
 MANIFEST			This list of files

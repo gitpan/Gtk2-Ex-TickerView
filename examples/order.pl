@@ -18,16 +18,18 @@
 # with Gtk2-Ex-TickerView.  If not, see <http://www.gnu.org/licenses/>.
 
 
+# Usage: ./order.pl
+#
 # This program illustrates the way pack_start and pack_end interoperate.
 # Packing like this is a standard thing for any widget implementing
-# GtkCellLayout, and the same as pack_start/pack_end in a GtkBox.
+# GtkCellLayout, and it's the same as pack_start/pack_end in a GtkBox.
 #
 # Basically within each model item the pack_start renderers are drawn from
 # the left and then the pack_end renderers from the right.  TickerView
 # doesn't leave any space in the middle, so it ends up being the starts
-# drawn in order then the ends drawn in reverse order.  Thus the renderers
-# below (which ignore the data in the model), get added as "starts" 1, 2, 3
-# then "ends" 4, 5, 6, and come out "1 2 3 6 5 4".
+# drawn in order then the ends drawn in reverse order (ie. going from the
+# right).  Thus the renderers below (which ignore the data in the model),
+# get added as "starts" 1, 2, 3 then "ends" 4, 5, 6, and give "1 2 3 6 5 4".
 
 use strict;
 use warnings;

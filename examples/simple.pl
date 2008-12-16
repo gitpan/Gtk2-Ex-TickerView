@@ -18,10 +18,12 @@
 # with Gtk2-Ex-TickerView.  If not, see <http://www.gnu.org/licenses/>.
 
 
+# Usage: ./simple.pl
+#
 # This program is pretty much the minimum you need to do to get something
-# showing on the screen for a TickerView (or any of the Gtk model/view
-# things for that matter).  Basically a model supplies the data, then a
-# cellrenderer is how to draw it, and the "attributes" settings on the
+# showing on the screen for a TickerView, or any of the Gtk model/view
+# things for that matter.  Basically a model supplies the data, then a
+# CellRenderer is how to draw it, and the "attributes" settings on the
 # TickerView tie the model's data columns to the renderer's input
 # properties.
 
@@ -32,10 +34,10 @@ use Gtk2 '-init';
 use Gtk2::Ex::TickerView;
 
 # Create a model object with the data that's going to be shown, in this case
-# a Gtk2::ListStore with just one column and with text strings in the rows.
-# The "*"s at the start of each item are just a simple visual separator.
-# You could use a unicode bullet or whatnot if you're confident of having
-# the fonts.
+# a Gtk2::ListStore with just one column and just text strings in the rows.
+# The "*"s at the start of each item are a simple visual separator.  You
+# could use a unicode bullet or the like if you're confident of having the
+# fonts.
 #
 my $liststore = Gtk2::ListStore->new ('Glib::String');
 foreach my $str ('* Item one',
@@ -54,26 +56,26 @@ foreach my $str ('* Item one',
 #
 my $ticker = Gtk2::Ex::TickerView->new (model => $liststore);
 
-# But the View by itself doesn't draw anything, that has to be done with a
-# CellRenderer set into it, in this case a text renderer.
+# But the TickerView by itself doesn't draw anything, that has to be done
+# with a CellRenderer set into it, in this case a text renderer.
 #
 my $cellrenderer = Gtk2::CellRendererText->new;
 $ticker->pack_start ($cellrenderer, 0);
 
-# And the View has to be told wat data columns to pass from the model into
-# the CellRenderer.  In this case there's just one text string column in the
-# model (column 0) and it's the text for the renderer.  But you could also
-# have another column as say 'foreground' for per-item colour control
-# (something incidentally which can be done through a Pango markup string
-# from the model and passing that as 'markup' instead of 'text' into the
-# CellRenderer).
+# And the TickerView has to be told what data columns to pass from the model
+# into the CellRenderer.  In this case there's just one text string column
+# in the model (column 0) and it's the text for the renderer.  But you could
+# also have another column as say 'foreground' for per-item colour control
+# (something incidentally which can also be done through a Pango markup
+# string from the model and passing that as 'markup' instead of 'text' into
+# the CellRenderer).
 #
 $ticker->add_attribute ($cellrenderer,
                         'text', # the renderer setting
                         0);     # and the column of the model
 
 
-# Now stick the View in a toplevel window.
+# Now stick the TickerView in a toplevel window.
 #
 my $toplevel = Gtk2::Window->new('toplevel');
 $toplevel->signal_connect (destroy => sub { Gtk2->main_quit; });
@@ -83,7 +85,7 @@ $toplevel->add ($ticker);
 # here lets that pass upwards.  But the TickerView doesn't have any
 # particular desired width, so guess at 300 pixels.  You could do something
 # based on the screen width, or on the width of a character in the
-# CellRenderer's font or whatever if you wanted to be fancy.
+# CellRenderer's font etc if you wanted to be fancy.
 #
 $toplevel->set_size_request (300, -1);
 

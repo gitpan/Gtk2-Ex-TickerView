@@ -21,7 +21,7 @@
 # This is an example news ticker, using a Gtk2::ListStore as the underlying
 # model.  The first entry in the list is updated under a timer to show the
 # current time and you can see it getting redrawn automatically on each
-# change to the model (including during a user drag).
+# change to the model (including updating during a user drag).
 #
 # There's two renderers, a pixbuf showing a yellow house icon, then a text
 # renderer for the string from the model.  The pixbuf could be made to vary
@@ -99,11 +99,11 @@ $ticker->set_attributes ($renderer2, markup => 0);
 
 sub timer_callback {
   # note POSIX::strftime is locale bytes, so really ought to recode it to
-  # perl wide-char unicode here, but %H%M%S are only digits
+  # perl wide-char unicode here, but %H%M%S is only digits
   my $str = POSIX::strftime ("News time <tt>%H:%M:%S</tt>",
                              localtime (time()));
   $liststore->set_value ($liststore->get_iter_first, 0, $str);
-  return 1; # continue timer
+  return 1; # Glib::SOURCE_CONTINUE, continue timer
 }
 timer_callback();                            # initial time display
 Glib::Timeout->add (1000, \&timer_callback); # periodic updates
@@ -120,6 +120,7 @@ $ticker->signal_connect
      } elsif ($keyval == Gtk2::Gdk->keyval_from_name ('Q')) {
        $toplevel->destroy;
      }
+     return 0; # Gtk2::EVENT_PROPAGATE
    });
 
 $toplevel->show_all;

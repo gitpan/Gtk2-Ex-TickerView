@@ -28,14 +28,16 @@
 #
 # The downloads are done at the start and then just displayed from a
 # Gtk2::ListStore.  A proper program would have some sort of refresh, and
-# would preferrably download in a subprocess or a separate thread so as not
-# to block the GUI.
+# would preferably not block the GUI, meaning all the usual Gtk2-Perl
+# approaches of a subprocess, or a thread, or POE cooperative tasking like
+# in poe-yahoo-quotes.pl, or one of the asynch HTTP libraries, etc.
 #
-# It's also of course possible to use something more sophisticated than just
-# a ListStore for the data, like a ListStore of symbols alone and then a
-# TreeModelFilter on top to generate the displayed strings "on demand", with
-# 'row-changed' emissions when a download has provided new data (to make
-# that element redisplay).
+# It's also possible to use something more sophisticated than just a
+# ListStore for the data.  You could make a ListStore of the symbols alone
+# and then have a TreeModelFilter wrapping it with a "modify" func which
+# generates the displayed strings "on demand", perhaps out of a database,
+# and with 'row-changed' emission when a download has provided new data (to
+# make that element redraw if necessary).
 #
 
 

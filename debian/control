@@ -16,7 +16,7 @@
 # with Gtk2-Ex-TickerView.  If not, see <http://www.gnu.org/licenses/>.
 
 
-# libglib-ex-objectbits-perl is >= 2 to have Glib::Ex::SourceIds
+# libglib-ex-objectbits-perl >= 2 to have Glib::Ex::SourceIds
 # (other dependencies per Makefile.PL)
 
 

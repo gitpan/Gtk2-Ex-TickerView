@@ -17,6 +17,12 @@ with Gtk2-Ex-TickerView.  If not, see <http://www.gnu.org/licenses/>.
 
 
 
+Version 12, December 2008
+    - new vertical orientation option
+
+Version 11, December 2008
+    - remove builder test which failed on older Gtk
+
 Version 10, November 2008
     - allow for older Gtk without get_cells in the test suite
 

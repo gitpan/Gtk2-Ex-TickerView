@@ -87,9 +87,11 @@ myman:
 LINT_FILES = $(TO_INST_PM) t/*.t examples/*.pl devel/*.pl
 lint:
 	for i in $(LINT_FILES); do perl -MO=Lint $$i; done
-	podchecker $(LINT_FILES)
 pc:
+	-podchecker $(LINT_FILES)
 	perlcritic $(LINT_FILES)
+unused:
+	for i in $(LINT_FILES); do perl -Mwarnings::unused -I lib $$i; done
 
 # find files in the dist with mod times this year, but without this year in
 # the copyright line
@@ -102,9 +104,9 @@ copyright-years-check:
 	  while read i; do \
 	    case $$i in \
 	      '' | */ \
-	      | debian/changelog | debian/compat | debian/control \
+	      | debian/changelog | debian/compat \
 	      | t/pod.t \
-	      | COPYING | MANIFEST* | SIGNATURE | META.yml) \
+	      | COPYING | MANIFEST | SIGNATURE | META.yml) \
 	      continue ;; \
 	    esac; \
 	    if test -e "$(srcdir)/$$i"; then f="$(srcdir)/$$i"; \
