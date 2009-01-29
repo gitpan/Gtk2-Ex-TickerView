@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# Copyright 2007, 2008 Kevin Ryde
+# Copyright 2007, 2008, 2009 Kevin Ryde
 
 # This file is part of Gtk2-Ex-TickerView.
 #
@@ -17,6 +17,7 @@
 # You should have received a copy of the GNU General Public License along
 # with Gtk2-Ex-TickerView.  If not, see <http://www.gnu.org/licenses/>.
 
+use 5.008;
 use strict;
 use warnings;
 use ExtUtils::MakeMaker;
@@ -44,27 +45,44 @@ WriteMakefile
                     'Glib::Ex::SignalIds' => 0,
                     'Glib::Ex::SourceIds' => 0,
 
-                    # in fact Gtk2 requires perl 5.8 which has List::Util
-                    # and Scalar::Util builtin already
-                    'List::Util' => 0,
-                    'Scalar::Util' => 0,
-
                     # Extras for the devel/ directory development programs
-                    #   Glib::Ex::ConnectProperties
-                    #   Devel::StackTrace
-                    #
-                    # Optional for the examples/ directory programs
-                    #   Finance::Quote
+                    #   
+                    #   
                     #
                    },
    clean        => { FILES => "TickerView.html" },
 
    EXTRA_META => <<'HERE',
+optional_features:
+    maximum_tests:
+        description: Have "make test" do as much as possible.
+        requires:
+            Test::Pod: 1.00
+            Test::Weaken: 1.002
+            Gtk2: 0
+    maximum_examples:
+        description: Be able to run all the example programs.
+        requires:
+            Finance::Quote: 0
+            POE: 0
+            POE::Loop::Glib: 0
+            POE::Component::Client::HTTP: 0
+            HTTP::Request: 0
+            URI::Escape: 0
+            Gtk2: 0
+    maximum_devel:
+        description: Be able to run all the development programs.
+        requires:
+            Glib::Ex::ConnectProperties: 0
+            Devel::StackTrace: 0
+            Devel::FindRef: 0
+            Devel::Peek: 0
 no_index:
     directory:
         - devel
 resources:
     homepage: http://www.geocities.com/user42_kevin/gtk2-ex-tickerview/index.html
+    license: http://www.gnu.org/licenses/#GPL
 HERE
   );
 
@@ -82,7 +100,7 @@ TickerView.html: lib/Gtk2/Ex/TickerView.pm Makefile
 myman:
 	mv MANIFEST MANIFEST.old
 	touch SIGNATURE
-	(make manifest 2>&1; diff -u MANIFEST.old MANIFEST) |less
+	(make manifest 2>&1; diff -u MANIFEST.old MANIFEST; rm MANIFEST.old) |less
 
 LINT_FILES = $(TO_INST_PM) t/*.t examples/*.pl devel/*.pl
 lint:
@@ -91,7 +109,11 @@ pc:
 	-podchecker $(LINT_FILES)
 	perlcritic $(LINT_FILES)
 unused:
-	for i in $(LINT_FILES); do perl -Mwarnings::unused -I lib $$i; done
+	for i in $(LINT_FILES); do \
+	  perl -Mwarnings::unused=-lexical \
+	    -MO=Lint,no-undefined-subs,no-context \
+	    -I lib $$i; \
+	done
 
 # find files in the dist with mod times this year, but without this year in
 # the copyright line

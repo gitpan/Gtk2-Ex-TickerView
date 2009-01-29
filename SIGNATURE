@@ -15,37 +15,41 @@ not run its Makefile.PL or Build.PL.
 Hash: SHA1
 
 SHA1 8624bcdae55baeef00cd11d5dfcfa60f68710a02 COPYING
-SHA1 a00ae4f2e595c73ebe5c69ff84c8742494a8d936 Changes
-SHA1 4c6c46458bda4268f612620cdc534dd10a1da48f MANIFEST
-SHA1 d99423da8ba6aa3e9210b914017514094237943c MANIFEST.SKIP
-SHA1 9784dd1d2e4364df5523de5003727df5cdafb473 META.yml
-SHA1 c45c96083814d831cdc0d94ea9582c7ce84d1a47 Makefile.PL
-SHA1 5bed07be2f7290405b6cb5f192a8979782109322 README
-SHA1 784368b57193fb45ccab4ac173ed53e03caaa245 debian/changelog
+SHA1 6b71690e1f416435738ee98ded61b65852ce59bc Changes
+SHA1 6a85766c11ae595cf92fb2f9c90395e1372a4fd7 MANIFEST
+SHA1 4d5d508b1d666157c1bfcf441dc159f079e3ef68 MANIFEST.SKIP
+SHA1 384b390720b6dec84b8a58a83d0732c042c9d9e1 META.yml
+SHA1 8eb2d9ad63c9c329b6cf6133e4bf920fc8df15e0 Makefile.PL
+SHA1 28febfdd72a36a06a969acf9785c5bd8db47aa5c README
+SHA1 4f871e3bfbd731c4b8cc3a24cc417d13cd46d873 debian/changelog
 SHA1 1b6453892473a467d07372d45eb05abc2031647a debian/compat
-SHA1 9747b8c51df58e57413a178bdb71c1b937740a55 debian/control
+SHA1 f3df2517cb968ef49ff899b6264885ae75a68f69 debian/control
 SHA1 03bbd5a133c50f443068a17178445dfcb2b5718e debian/copyright
 SHA1 33917358a6e8c59409c20d1540da1780abd352f2 debian/rules
 SHA1 477b4135453a9311ad08c225f023f991575ef04a debian/watch
 SHA1 1449ff40917ba9a74e89af73f187b2434b7bb541 devel/buildable.pl
 SHA1 9af00e8470819bad347fb50fc8f91794aa73e64a devel/clock-gettime.pl
+SHA1 7b6af02b60dbcace7d3823def626d609cc968daa devel/display.t
 SHA1 6940937123b46fc6581fbf06ee88da588086f3b5 devel/refilter.pl
-SHA1 68f71c8388817c82b7de1ff08355e39c44bc4d1b devel/run.pl
+SHA1 b82c5ed32e5b2f774ba103a22a6a8867a50f5f69 devel/run.pl
 SHA1 740991c86398fde1c7bc5af47a3c3acf62c10d38 devel/window-move.pl
 SHA1 827688aa82b2ecbb4307bc3eddfa30079eacc988 examples/builder.pl
-SHA1 3ea8fcdc422d866f2fb7645f41e4b7ee2e194b6d examples/financequote.pl
+SHA1 f2bd55d9c19fbe645cd7097bda37749b9c7a6082 examples/financequote.pl
 SHA1 f50c9469bad2550444eac3d55b5e4b57feba7825 examples/news.pl
 SHA1 ccdf373665eb792e119ce05842757aa5f2ea335c examples/order.pl
-SHA1 04eabdbc1407452394a338d49888ce32b58b272e examples/poe-yahoo-quotes.pl
+SHA1 ce2ae83582154681d1503117fa2e56189aff0716 examples/poe-yahoo-quotes.pl
+SHA1 01edb777a545b6a8f0f1b6365dc874b9bed15056 examples/rottext-vertical.pl
 SHA1 cb8199b0b27283b0cb8a924cb1478e05b12f5cb0 examples/simple.pl
 SHA1 82f14a8efcaa0ec9b48d28977c27636b95663478 examples/vertical.pl
-SHA1 0914397e369551d72a90fde41edc3c727e204652 lib/Gtk2/Ex/TickerView.pm
-SHA1 6bcfdc6b40d647918d1cd4b664b424bb684c3551 t/TickerView.t
+SHA1 3b214e1cd66032ffb73835f3d1b158cd8fda27e4 lib/Gtk2/Ex/TickerView.pm
+SHA1 c53d23aa9a8f2a7acfd5772e3a447d0b935dedab t/TickerView.t
+SHA1 1773c60dc80c47972f83f6b9d854969de6d238ea t/buildable.t
 SHA1 a661a39e55a4127aecb1b97a631c4f01f7dce8c6 t/pod.t
+SHA1 f5376a4976fd475a682512d1d9dbb44c53eef858 t/test-weaken.t
 -----BEGIN PGP SIGNATURE-----
 Version: GnuPG v1.4.9 (GNU/Linux)
 
-iD8DBQFJRgIALFMCIV9q3ToRAnFKAJ4miErUgm1xdn/ehTc+9jyCHzT7YQCcCTwr
-wcX3dsFeKpxIB3IstUlpEOI=
-=cJ5f
+iD8DBQFJgiLNLFMCIV9q3ToRAloLAJ9rBqCUwPMJARaHiwNwLU410y5khwCdGKug
+IhRXd99G1dLBvCRyIJN4V0k=
+=Tt8U
 -----END PGP SIGNATURE-----

@@ -8,6 +8,7 @@ debian/rules
 debian/watch
 devel/buildable.pl
 devel/clock-gettime.pl
+devel/display.t
 devel/refilter.pl
 devel/run.pl
 devel/window-move.pl
@@ -16,6 +17,7 @@ examples/financequote.pl
 examples/news.pl
 examples/order.pl
 examples/poe-yahoo-quotes.pl
+examples/rottext-vertical.pl
 examples/simple.pl
 examples/vertical.pl
 lib/Gtk2/Ex/TickerView.pm
@@ -24,6 +26,8 @@ MANIFEST			This list of files
 MANIFEST.SKIP
 README
 SIGNATURE
+t/buildable.t
 t/pod.t
+t/test-weaken.t
 t/TickerView.t
 META.yml                                 Module meta-data (added by MakeMaker)

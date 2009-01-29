@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# Copyright 2008 Kevin Ryde
+# Copyright 2008, 2009 Kevin Ryde
 
 # This file is part of Gtk2-Ex-TickerView.
 #
@@ -51,7 +51,7 @@ my $method = 'australia';
 my @symbols = ('^AXJO', 'BHP', 'NAB', 'ALL', 'BBG', 'WOW');
 
 if (@ARGV && $ARGV[0] =~ /^-/) {
-  $method = $';
+  $method = substr $ARGV[0], 1;
   shift @ARGV;
 }
 if (@ARGV) {
@@ -67,7 +67,6 @@ sub quotes_string {
   my ($quotes, $symbol) = @_;
   my $ret = "$symbol ";
   if (! $quotes->{$symbol,'success'}) { return $ret . '[error]'; }
-  my $colour = '<span foreground="white">';
 
   my $last = $quotes->{$symbol,'last'};
   if (! defined $last && defined $quotes->{$symbol,'price'}) {

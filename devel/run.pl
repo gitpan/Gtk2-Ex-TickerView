@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# Copyright 2007, 2008 Kevin Ryde
+# Copyright 2007, 2008, 2009 Kevin Ryde
 
 # This file is part of Gtk2-Ex-TickerView.
 #
@@ -28,7 +28,8 @@ use Glib::Ex::ConnectProperties;
 use FindBin;
 my $progname = $FindBin::Script;
 
-print Gtk2::Ex::TickerView->isa('Gtk2::Buildable')?'yes':'not'," buildable\n";
+print "$progname: ",
+  Gtk2::Ex::TickerView->isa('Gtk2::Buildable')?'yes':'not'," buildable\n";
 
 sub exception_handler {
   my ($msg) = @_;
@@ -62,22 +63,6 @@ foreach my $str ('yy', 'zz-bb', '<b>xx</b>', 'fjdks', '32492', "abc\ndef") {
   $model->set_value ($iter, 0, $str);
 }
 
-if (0) {
-  {
-    my $ticker = Gtk2::Ex::TickerView->new (model => $model,
-                                            attributes => {text => 0}
-                                           );
-    my $menu = $ticker->menu;
-    $ticker->signal_connect (destroy => sub {
-                               print "$progname: ticker destroy signal\n";
-                             });
-    $menu->signal_connect (destroy => sub {
-                             print "$progname: menu destroy signal\n";
-                           });
-  }
-  Gtk2->main;
-}
-
 Gtk2::Rc->parse_string (<<'HERE');
 style "my_style" {
   fg[ACTIVE]   = { 1.0, 1.0, 1.0 }
@@ -89,13 +74,14 @@ widget "*.Gtk2__Ex__TickerView" style "my_style"
 HERE
 
 my $ticker = Gtk2::Ex::TickerView->new (model => $model,
-                                        frame_rate => 500,
-                                        speed => 500,
+                                        frame_rate => 2,
+                                        speed => 20,
                                         run => 0,
-                                        orientation => 'vertical',
+                                        # orientation => 'vertical',
                                        );
 print "$progname: ticker name=", $ticker->get_name || 'undef',
-  " initial flags: ", $ticker->flags,"\n";
+  " initial flags: ", $ticker->flags,
+  " orientation '",$ticker->get('orientation'),"'\n";
 { my $color = $ticker->get_style->fg('normal');
   print "$progname: ticker fg[NORMAL]: ", $color->to_string, "\n";
 }
@@ -125,11 +111,20 @@ if (0) {
   $ticker->pack_start ($renderer, 1);
   $ticker->set_cell_data_func
     ($renderer, sub {
-       my ($ticker, $renderer, $model, $iter, $userdata) = @_;
+       my ($ticker, $renderer, $model, $iter) = @_;
        my $len = length ($model->get ($iter, 0));
        $renderer->set('visible', $len != 5);
      });
 }
+
+$ticker->signal_connect
+  (notify => sub {
+     my ($ticker, $pspec) = @_;
+     my $pname = $pspec->get_name;
+     my $newval = $ticker->get($pname);
+     $newval = (defined $newval ? "'$newval'" : 'undef');
+     print "$progname: ticker notify '$pname' now $newval\n";
+   });
 $ticker->signal_connect
   (destroy => sub {
      print "$progname: ticker destroy signal\n";
@@ -165,32 +160,27 @@ if (0) {
   $menu->append ($item);
 }
 
-{
-  my $button = Gtk2::CheckButton->new_with_label ('Run');
+{ my $button = Gtk2::CheckButton->new_with_label ('Run');
+  $left_vbox->pack_start ($button, 0, 0, 0);
   Glib::Ex::ConnectProperties->new ([$ticker,'run'],
                                     [$button,'active']);
-  $left_vbox->pack_start ($button, 0, 0, 0);
 }
-{
-  my $button = Gtk2::CheckButton->new_with_label ('Show');
+{ my $button = Gtk2::CheckButton->new_with_label ('Show');
+  $left_vbox->pack_start ($button, 0, 0, 0);
   Glib::Ex::ConnectProperties->new ([$ticker,'visible'],
                                     [$button,'active']);
-  $left_vbox->pack_start ($button, 0, 0, 0);
 }
-{
-  my $button = Gtk2::CheckButton->new_with_label ('Sensitive');
+{ my $button = Gtk2::CheckButton->new_with_label ('Sensitive');
+  $left_vbox->pack_start ($button, 0, 0, 0);
   Glib::Ex::ConnectProperties->new ([$ticker,'sensitive'],
                                     [$button,'active']);
-  $left_vbox->pack_start ($button, 0, 0, 0);
 }
-{
-  my $button = Gtk2::CheckButton->new_with_label ('Fixed Height');
+{ my $button = Gtk2::CheckButton->new_with_label ('Fixed Height');
+  $left_vbox->pack_start ($button, 0, 0, 0);
   Glib::Ex::ConnectProperties->new ([$ticker,'fixed-height-mode'],
                                     [$button,'active']);
-  $left_vbox->pack_start ($button, 0, 0, 0);
 }
-{
-  my $button = Gtk2::CheckButton->new_with_label ('Forced Height');
+{ my $button = Gtk2::CheckButton->new_with_label ('Forced Height');
   $button->signal_connect (toggled => sub {
                              $ticker->set (height_request
                                            => $button->get_active
@@ -198,8 +188,7 @@ if (0) {
                            });
   $left_vbox->pack_start ($button, 0, 0, 0);
 }
-{
-  my $button = Gtk2::CheckButton->new_with_label ('Model');
+{ my $button = Gtk2::CheckButton->new_with_label ('Model');
   $button->set_active ($ticker->get('model'));
   $button->signal_connect (toggled => sub {
                              $ticker->set (model => ($button->get_active
@@ -207,8 +196,7 @@ if (0) {
                            });
   $left_vbox->pack_start ($button, 0, 0, 0);
 }
-{
-  my $button = Gtk2::CheckButton->new_with_label ('pointer-motion-hint');
+{ my $button = Gtk2::CheckButton->new_with_label ('pointer-motion-hint');
   $button->signal_connect (toggled => sub {
                              my $window = $ticker->window;
                              my $events = $window->get_events;
@@ -240,67 +228,55 @@ if (0) {
   $button->signal_connect (clicked => sub { $ticker->queue_draw; });
   $left_vbox->pack_start ($button, 0, 0, 0);
 }
-{
-  my $direction_model = Gtk2::ListStore->new ('Glib::String',
-                                              'Gtk2::TextDirection');
-  $direction_model->set ($direction_model->append, 0, 'LtoR', 1, 'ltr');
-  $direction_model->set ($direction_model->append, 0, 'RtoL', 1, 'rtl');
+{ my $orient_hbox = Gtk2::HBox->new;
+  $left_vbox->pack_start ($orient_hbox, 0,0,0);
 
-  my $hbox = Gtk2::HBox->new;
-  $left_vbox->pack_start ($hbox, 0,0,0);
-  $hbox->pack_start (Gtk2::Label->new('Direction'), 0,0,0);
+  $orient_hbox->pack_start (Gtk2::Label->new('Orient'), 0,0,0);
 
-  my $combobox = Gtk2::ComboBox->new_with_model ($direction_model);
-  my $renderer = Gtk2::CellRendererText->new;
-  $combobox->pack_start ($renderer, 1);
-  $combobox->set_attributes ($renderer, 'text', 0);
-  $combobox->set_active (0);
-  $combobox->signal_connect (changed => sub {
-                               my $iter = $combobox->get_active_iter;
-                               my $dir = $direction_model->get_value ($iter,1);
-                               $ticker->set_direction ($dir);
-                             });
-  $hbox->pack_start ($combobox, 1,1,0);
+  my $orient_combo = My::EnumComboBox->new (enum_type => 'Gtk2::Orientation');
+  $orient_hbox->pack_start ($orient_combo, 1,1,0);
+  Glib::Ex::ConnectProperties->new ([$ticker,'orientation'],
+                                    [$orient_combo,'value']);
+}
+{ my $dir_hbox = Gtk2::HBox->new;
+  $left_vbox->pack_start ($dir_hbox, 0,0,0);
 
+  $dir_hbox->pack_start (Gtk2::Label->new('Direction'), 0,0,0);
+
+  my $dir_combo = My::EnumComboBox->new (enum_type => 'Gtk2::TextDirection',
+                                         value => $ticker->get_direction);
+  $dir_hbox->pack_start ($dir_combo, 1,1,0);
+  $dir_combo->signal_connect (changed => sub {
+                                my $dir = $dir_combo->get('value');
+                                print "$progname: set_direction $dir\n";
+                                $ticker->set_direction ($dir);
+                              });
   $ticker->signal_connect
     (direction_changed => sub {
-       print "$progname: ticker direction changed\n";
-       my $idx = ($ticker->get_direction eq 'ltr' ? 0 : 1);
-       $combobox->set_active ($idx);
+       my $dir = $ticker->get_direction;
+       print "$progname: ticker direction changed to $dir\n";
+       $dir_combo->set (value => $dir);
      });
 }
 {
-  my $state_model = Gtk2::ListStore->new ('Glib::String');
-  my %state_to_index;
-  my $i = 0;
-  foreach my $elem (Glib::Type->list_values('Gtk2::StateType')) {
-    my $state = $elem->{'nick'};
-    $state_model->set ($state_model->append, 0 => $state);
-    $state_to_index{$state} = $i;
-    $i++;
-  }
-  my $hbox = Gtk2::HBox->new;
-  $left_vbox->pack_start ($hbox, 0,0,0);
-  $hbox->pack_start (Gtk2::Label->new('State'), 0,0,0);
+  my $state_hbox = Gtk2::HBox->new;
+  $left_vbox->pack_start ($state_hbox, 0,0,0);
 
-  my $combobox = Gtk2::ComboBox->new_with_model ($state_model);
-  my $renderer = Gtk2::CellRendererText->new;
-  $combobox->pack_start ($renderer, 1);
-  $combobox->set_attributes ($renderer, 'text', 0);
-  $combobox->set_active (0);
-  $hbox->pack_start ($combobox, 1,1,0);
-  $combobox->signal_connect (changed => sub {
-                               my $iter = $combobox->get_active_iter;
-                               my $state = $state_model->get_value ($iter,0);
-                               print "$progname: set state $state\n";
-                               $ticker->set_state ($state);
-                             });
+  $state_hbox->pack_start (Gtk2::Label->new('State'), 0,0,0);
 
+  my $state_combo = My::EnumComboBox->new (enum_type => 'Gtk2::StateType',
+                                           value => $ticker->state);
+  $state_hbox->pack_start ($state_combo, 1,1,0);
+  $state_combo->signal_connect (changed => sub {
+                                  my $state = $state_combo->get('value');
+                                  print "$progname: set state $state\n";
+                                  $ticker->set_state ($state);
+                                });
   $ticker->signal_connect
     (state_changed => sub {
        my $state = $ticker->state;
        print "$progname: ticker state changed to $state\n";
-       $combobox->set_active ($state_to_index{$state});
+       $state_combo->set (value => $state);
      });
 }
 {
@@ -485,10 +461,150 @@ my $insert_count = 1;
 }
 
 { my $req = $ticker->size_request;
-  print "$progname: ticker '",$ticker->get('orientation'),"' size_request is ",$req->width,"x",$req->height,"\n";
+  print "$progname: ticker size_request is ",$req->width,"x",$req->height,
+    " (for '",$ticker->get('orientation'),"')\n";
 }
 $ticker->set_size_request (100,100);
 
 $toplevel->show_all;
 Gtk2->main;
 exit 0;
+
+
+package My::EnumComboBox;
+use strict;
+use warnings;
+use Gtk2;
+
+use Glib::Object::Subclass
+  'Gtk2::ComboBox',
+  signals => { changed => \&_do_changed },
+  properties => [ (Glib::ParamSpec->can('type')  # GType params coming soon...
+                   ? Glib::ParamSpec->type
+                   ('enum-type',
+                    'enum-type',
+                    'Blurb.',
+                    'Gtk2::Enum',  # subtype of Enum
+                    Glib::G_PARAM_READWRITE)
+                   : Glib::ParamSpec->string
+                   ('enum-type',
+                    'enum-type',
+                    'Blurb.',
+                    '',  # default
+                    Glib::G_PARAM_READWRITE)),
+
+                  Glib::ParamSpec->scalar
+                  ('value',
+                   'value',
+                   'Blurb.',
+                   Glib::G_PARAM_READWRITE),
+                ];
+
+# gtk_combo_box_new_text() is quite close to what's wanted here, but there's
+# no "set_active_text()" to go to a named value and the format of the
+# underlying model might be meant to be a secret ...
+#
+sub INIT_INSTANCE {
+  my ($self) = @_;
+  my $renderer = Gtk2::CellRendererText->new;
+  $self->pack_start ($renderer, 0);
+  $self->set_attributes ($renderer, text => 0);
+}
+
+sub GET_PROPERTY {
+  my ($self, $pspec) = @_;
+  my $pname = $pspec->get_name;
+  if ($pname eq 'value') {
+    my $iter = $self->get_active_iter || return undef;
+    my $model = $self->get_model;
+    $model->get ($iter, 0);
+  } elsif ($pname eq 'enum_type') {
+    my $model = $self->get_model || return undef;
+    return $model->get('enum-type');
+  } else {
+    return $self->{$pname};
+  }
+}
+sub SET_PROPERTY {
+  my ($self, $pspec, $newval) = @_;
+  my $pname = $pspec->get_name;
+
+  if ($pname eq 'enum_type') {
+    my $value = $self->get('value');
+    my $model;
+    if ($newval) {
+      $model = ($self->get_model || My::EnumModel->new);
+      $model->set_property (enum_type => $newval);
+    }
+    $self->set (model => $model,
+                value => $value);
+
+  } elsif ($pname eq 'value') {
+    my $found = 0;
+    if (! defined $newval) {
+      $self->set_active (-1);
+      return;
+    }
+    my $model = $self->get_model;
+    $model->foreach (sub {
+                       my ($model, $path, $iter) = @_;
+                       if ($newval eq ($model->get($iter, 0))) {
+                         $self->set_active_iter ($iter);
+                         $found = 1;
+                         return 1; # stop looping
+                       }
+                       return 0; # continue
+                     });
+    if (! $found) {
+      $self->set_active (-1);
+    }
+
+  } else {
+    $self->{$pname} = $newval;
+  }
+}
+
+# 'changed' class closure from Gtk2::ComboBox
+sub _do_changed {
+  my ($self) = @_;
+  $self->signal_chain_from_overridden;
+  $self->notify ('value');
+}
+
+package My::EnumModel;
+use strict;
+use warnings;
+
+use Glib::Object::Subclass
+  'Gtk2::ListStore',
+  properties => [ Glib::ParamSpec->string  # ->gtype when available
+                  ('enum-type',
+                   'enum-type',
+                   'Blurb.',
+                   'Gtk2::TreeModel',
+                   Glib::G_PARAM_READWRITE),
+                ];
+
+sub INIT_INSTANCE {
+  my ($self) = @_;
+  $self->set_column_types ('Glib::String');
+}
+
+sub SET_PROPERTY {
+  my ($self, $pspec, $newval) = @_;
+  my $pname = $pspec->get_name;
+  $self->{$pname} = $newval;  # per default GET_PROPERTY
+
+  if ($pname eq 'enum_type') {
+    my $type = $newval;
+    $self->clear;
+
+    foreach my $info (Glib::Type->list_values($type)) {
+      my $state = $info->{'nick'};
+      $self->set ($self->append, 0 => $state);
+    }
+  }
+}
+
+1;
+__END__

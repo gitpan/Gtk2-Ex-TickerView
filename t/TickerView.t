@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# Copyright 2007, 2008 Kevin Ryde
+# Copyright 2007, 2008, 2009 Kevin Ryde
 
 # This file is part of Gtk2-Ex-TickerView.
 #
@@ -20,21 +20,17 @@
 use strict;
 use warnings;
 use Gtk2::Ex::TickerView;
-use Test::More tests => 54;
+use Test::More tests => 45;
 
-# return true if there's any signal handlers connected to $obj
-sub any_signal_connections {
-  my ($obj) = @_;
-  my @connected = grep {$obj->signal_handler_is_connected ($_)} (0 .. 500);
-  if (@connected) {
-    diag "$obj signal handlers connected: ",join(' ',@connected),"\n";
-    return 1;
-  }
-  return 0;
+my $want_version = 12;
+ok ($Gtk2::Ex::TickerView::VERSION >= $want_version, 'VERSION variable');
+ok (Gtk2::Ex::TickerView->VERSION  >= $want_version, 'VERSION class method');
+Gtk2::Ex::TickerView->VERSION ($want_version);
+{
+  my $ticker = Gtk2::Ex::TickerView->new;
+  ok ($ticker->VERSION >= $want_version, 'VERSION object method');
+  $ticker->VERSION ($want_version);
 }
-
-ok ($Gtk2::Ex::TickerView::VERSION >= 11);
-ok (Gtk2::Ex::TickerView->VERSION  >= 11);
 
 require Gtk2;
 diag ("Perl-Gtk2 version ",Gtk2->VERSION);
@@ -56,8 +52,33 @@ diag ("Running on       Gtk version ",
       Gtk2::minor_version(), ".",
       Gtk2::micro_version());
 
+# return true if there's any signal handlers connected to $obj
+sub any_signal_connections {
+  my ($obj) = @_;
+  my @connected = grep {$obj->signal_handler_is_connected ($_)} (0 .. 500);
+  if (@connected) {
+    diag "$obj signal handlers connected: ",join(' ',@connected),"\n";
+    return 1;
+  }
+  return 0;
+}
+
+## no critic (ProtectPrivateSubs)
+
+
 #------------------------------------------------------------------------------
-# _hash_keys_remap
+# _gettime()
+
+{
+  my $t1 = Gtk2::Ex::TickerView::_gettime();
+  sleep (1);
+  my $t2 = Gtk2::Ex::TickerView::_gettime();
+  ok ($t2 > $t1, '_gettime() advances');
+}
+
+
+#------------------------------------------------------------------------------
+# _hash_keys_remap()
 
 {
   my %h = (1 => 100, 2 => 200);
@@ -106,7 +127,7 @@ diag ("Running on       Gtk version ",
 
 
 #------------------------------------------------------------------------------
-# _do_rows_reordered
+# _do_rows_reordered()
 
 {
   my $model = Gtk2::ListStore->new ('Glib::Int');
@@ -121,17 +142,19 @@ diag ("Running on       Gtk version ",
   $model->reorder (1,2,3,0);
   is_deeply ([ map {$model->get($model->iter_nth_child(undef,$_),0)} 0..3 ],
              [ 110,120,130,100 ],
-             'reordered elements');
+             'reorder() permutes model rows');
 
   is ($ticker->{'want_index'}, 3,
-      'reordered want_index');
+      'reorder() permutes want_index');
   is_deeply ([ @{$row_widths}{0,1,2,3} ],
              [ 110,120,undef,100 ],
-             'reordered widths');
+             'reorder() permutes row_widths');
 }
 
 
 #------------------------------------------------------------------------------
+# _make_all_zeros_proc()
+
 {
   my $all_zeros = Gtk2::Ex::TickerView::_make_all_zeros_proc();
   ok (! &$all_zeros(0,0));
@@ -166,10 +189,14 @@ diag ("Running on       Gtk version ",
   ok (! &$all_zeros(0,1));
 }
 
+
+#------------------------------------------------------------------------------
+# reorder() of renderers
+
 {
   my $ticker = Gtk2::Ex::TickerView->new;
   isa_ok ($ticker, 'Gtk2::Ex::TickerView', 'ticker');
-  require Gtk2;
+
   my $r1 = Gtk2::CellRendererText->new;
   my $r2 = Gtk2::CellRendererText->new;
   $ticker->pack_start ($r1, 0);
@@ -214,6 +241,9 @@ diag ("Running on       Gtk version ",
              'reorder 3 first back to last');
 }
 
+#------------------------------------------------------------------------------
+# weakening
+
 {
   my $m1 = Gtk2::ListStore->new ('Glib::String');
   my $m2 = Gtk2::ListStore->new ('Glib::String');
@@ -250,99 +280,5 @@ diag ("Running on       Gtk version ",
       'no signal handlers left on model when unset');
 }
 
-SKIP: {
-  if (! Gtk2->init_check) { skip 'due to no DISPLAY available', 5; }
-
-  {
-    my $ticker = Gtk2::Ex::TickerView->new;
-    my $path = $ticker->get_path_at_pos (0, 0);
-    is ($path, undef, "get_path_at_pos when no model");
-
-    my $store = Gtk2::ListStore->new ('Glib::String');
-    $ticker->set (model => $store);
-    $path = $ticker->get_path_at_pos (0, 0);
-    is ($path, undef, "get_path_at_pos when empty model, and unrealized");
-
-    $ticker->set (model => undef);
-    $store->insert_with_values (0, 0=>'foo');
-    $ticker->set (model => $store);
-    $path = $ticker->get_path_at_pos (0, 0);
-    isa_ok ($path, 'Gtk2::TreePath');
-    if ($path) { $path = $path->to_string; }
-    is ($path, '0', "get_path_at_pos when non-empty and unrealized");
-
-    $ticker->set (model => undef);
-    $store->remove ($store->iter_nth_child(undef,0));
-    $ticker->set (model => $store);
-    my $toplevel = Gtk2::Window->new ('toplevel');
-    $toplevel->add ($ticker);
-    $toplevel->show_all;
-    $path = $ticker->get_path_at_pos (0, 0);
-    if ($path) { $path = $path->to_string; }
-    is ($path, undef, "get_path_at_pos when empty and realized");
-  }
-}
-
-SKIP: {
-  if (! Gtk2::Ex::TickerView->isa('Gtk2::Buildable')) {
-    skip 'due to no Gtk2::Buildable interface', 6;
-  }
-
-  my $builder = Gtk2::Builder->new;
-  $builder->add_from_string (<<'HERE');
-<interface>
-  <object class="Gtk2__Ex__TickerView" id="ticker">
-    <property name="width-request">200</property>
-    <child>
-      <object class="GtkCellRendererText" id="renderer">
-        <property name="xpad">10</property>
-      </object>
-      <attributes>
-        <attribute name="text">0</attribute>
-      </attributes>
-    </child>
-  </object>
-  <object class="GtkCellView" id="cellview">
-    <property name="width-request">200</property>
-    <child>
-      <object class="GtkCellRendererText" id="ren2">
-        <property name="xpad">10</property>
-      </object>
-      <attributes>
-        <attribute name="text">0</attribute>
-      </attributes>
-    </child>
-  </object>
-</interface>
-HERE
-
-  my $ticker = $builder->get_object('ticker');
-  isa_ok ($ticker, 'Gtk2::Ex::TickerView', 'ticker from buildable');
-
-  my $renderer = $builder->get_object('renderer');
-  isa_ok ($renderer, 'Gtk2::CellRendererText', 'renderer from buildable');
-  is_deeply ([ $ticker->GET_CELLS ], [ $renderer ],
-             'GET_CELLS ticker from buildable');
-
-  my $store = Gtk2::ListStore->new ('Glib::String');
-  $ticker->set (model => $store);
-  my $iter = $store->insert_with_values (0, 0=>'foo');
-  $ticker->_set_cell_data ($iter);  # from Gtk2::Ex::CellLayout::Base
-  is ($renderer->get ('text'), 'foo',
-      'renderer from buildable attribute set');
-
-  # Something fishy seen in gtk 2.12.1 (with gtk2-perl 1.180, 1.183 or
-  # 1.200) that $builder stays non-undef when weakened, though the objects
-  # within it weaken away as expected.  Some of the ref counting changed
-  # from what the very first gtkbuilder versions did, so think it's a gtk
-  # problem already fixed, so just ignore that test.
-  #
-  Scalar::Util::weaken ($builder);
-  Scalar::Util::weaken ($ticker);
-  Scalar::Util::weaken ($renderer);
-  # is ($builder,  undef, 'builder weakened');
-  is ($ticker,   undef, 'ticker from builder weakened');
-  is ($renderer, undef, 'renderer from builder weakened');
-}
 
 exit 0;
