@@ -29,11 +29,12 @@ use Glib;
 # Gtk2::Buildable overriding superclass interface
 use Gtk2 1.180;
 
-use Gtk2::Ex::SyncCall;
-use Gtk2::Ex::CellLayout::Base 2;  # version 2 for Gtk2::Buildable
-use base 'Gtk2::Ex::CellLayout::Base';
+use Gtk2::Ex::SyncCall 12; # version 12 for gtk XID workaround
+use Gtk2::Ex::CellLayout::Base 4;  # version 4 for _cellinfo_starts()
+our @ISA;
+push @ISA, 'Gtk2::Ex::CellLayout::Base';
 
-our $VERSION = 12;
+our $VERSION = 13;
 
 # set this to 1 for some diagnostic prints, or 2 for even more prints
 use constant DEBUG => 0;
@@ -162,9 +163,9 @@ use Glib::Object::Subclass
 #     1. _pixmap_shift() is easier.  It can decrement each $x by the shift
 #        amount and look for the last $x <= 0 as the drawn rows retained.
 #        When the last row has been chopped off at the right edge (which is
-#        almost always) the the second last position is immediately
-#        available to become pixmap_end_x, and the last index is
-#        pixmap_end_index to extend from.
+#        almost always) the second last position is immediately available to
+#        become pixmap_end_x, and the last index is pixmap_end_index to
+#        extend from.
 #
 #        If all positions weren't recorded then _pixmap_shift() would have
 #        to reconstruct them to find that $x <= 0 point and the second last
@@ -423,9 +424,13 @@ sub _do_size_request {
 # retained.  Probably moves alone won't occur often enough to make that
 # worth worrying about.
 #
+# Crib: no queue_draw() here, since the default redraw_on_alloc means that's
+# done automatically (in gtk_widget_size_allocate()).
+#
 sub _do_size_allocate {
   my ($self, $alloc) = @_;
   if (DEBUG) { print "TickerView size_allocate\n"; }
+
   $self->signal_chain_from_overridden ($alloc);
 
   if (my $pixmap = $self->{'pixmap'}) {
@@ -438,7 +443,6 @@ sub _do_size_allocate {
       return;
     }
   }
-  $self->queue_draw;
 }
 
 
@@ -785,16 +789,6 @@ sub _pixmap_extend {
     print "  extended to pixmap_end_x=$self->{'pixmap_end_x'}\n"; }
 }
 
-sub _cellinfo_starts {
-  my ($self) = @_;
-  return grep {$_->{'pack'} eq 'start'} @{$self->{'cellinfo_list'}};
-}
-# ENHANCE-ME: should this one reverse?, or leave it to the caller?
-sub _cellinfo_ends {
-  my ($self) = @_;
-  return grep {$_->{'pack'} ne 'start'} @{$self->{'cellinfo_list'}};
-}
-
 # _pixmap() returns 'pixmap', creating it if it doesn't already exist.
 # The height is the same as the window height.
 # The width is 1.5 * the window width, or half the screen width, whichever
@@ -1087,8 +1081,8 @@ sub _do_state_or_style_changed {
 #
 
 # _TIMER_PRIORITY is below the drawing priority GDK_PRIORITY_EVENTS in
-# _sync_call_handler(), so drawing of the the current position goes out
-# before making a scroll to a new position.
+# _sync_call_handler(), so drawing of the current position goes out before
+# making a scroll to a new position.
 #
 # Try _TIMER_PRIORITY below GDK_PRIORITY_REDRAW too, to hopefully cooperate
 # with redrawing of other widgets, letting their drawing go out before
@@ -1625,11 +1619,12 @@ __END__
 
 Gtk2::Ex::TickerView -- scrolling ticker display widget
 
+=for test_synopsis my ($model)
+
 =head1 SYNOPSIS
 
  use Gtk2::Ex::TickerView;
- my $ticker = Gtk2::Ex::TickerView->new (model => $model,
-                                         ...);
+ my $ticker = Gtk2::Ex::TickerView->new (model => $model);
  my $renderer = Gtk2::CellRendererText->new;
  $ticker->pack_start ($renderer, 0);
  $ticker->set_attributes ($renderer, text => 0); # column
@@ -1647,6 +1642,9 @@ The interfaces implemented are:
 
     Gtk2::Buildable (Gtk 2.12 and up)
     Gtk2::CellLayout
+
+The C<orientation> property is compatible with the Gtk2::Orientable
+interface, but that interface can't be added as of Perl-Gtk 1.221.
 
 =head1 DESCRIPTION
 
@@ -1671,8 +1669,7 @@ Or in C<vertical> orientation it scrolls upwards.
 
 Items are drawn with one or more C<Gtk2::CellRenderer> objects set into the
 TickerView as per the CellLayout interface (see L<Gtk2::CellLayout>).  For
-example for scrolling text you can use C<Gtk2::CellRendererText> as a
-renderer.
+example to scroll text you can use C<Gtk2::CellRendererText> as a renderer.
 
 If two or more renderers are set then they're drawn one after the other for
 each item, ie. row of the model.  For example you could have a
@@ -1728,7 +1725,7 @@ something.
 
 =over 4
 
-=item C<< Gtk2::Ex::TickerView->new (key => value, ...) >>
+=item C<< $ticker = Gtk2::Ex::TickerView->new (key => value, ...) >>
 
 Create and return a new C<Gtk2::Ex::TickerView> widget.  Optional key/value
 pairs set initial properties as per C<< Glib::Object->new >> (see
@@ -1788,7 +1785,7 @@ The speed the items scroll across, in pixels per second.
 The number of times each second the ticker moves and redraws.  Each move
 will be C<speed> divided by C<frame-rate> many pixels.
 
-The current current code uses the Glib main loop timer so the frame rate is
+The current current code uses the Glib main loop timer so the frame rate
 becomes integer milliseconds for actual use.  A minimum 1 millisecond is
 imposed, meaning frame rates more than 1000 are treated as 1000.  Of course
 1000 frames a second is pointlessly high.
@@ -1796,16 +1793,17 @@ imposed, meaning frame rates more than 1000 are treated as 1000.  Of course
 =item C<orientation> (C<Gtk2::Orientation> enum, default C<"horizontal">)
 
 If set to C<"vertical"> the ticker items are drawn vertically from the top
-of the window downwards and scroll up the screen.  Or with C<set_direction>
+of the window downwards, and scroll up the screen.  Or with C<set_direction>
 of C<rtl> mode the direction reverses so they're drawn from the bottom of
-the window upwards and scroll down the screen.  (The name C<rtl> doesn't
-make a great deal of sense in vertical mode.  Something to reverse the
-direction is certainly desired, but perhaps it shouldn't be the LtoR/RtoL
-setting ...)
+the window upwards, and scroll down the screen.
+
+(The name C<rtl> doesn't make a great deal of sense in vertical mode.
+Something to reverse the direction is certainly desired, but perhaps it
+shouldn't be the LtoR/RtoL setting ...)
 
 =item C<fixed-height-mode> (boolean, default false)
 
-If true then assume all rows in the model have the same height and it
+If true then assume all rows in the model have the same height and that it
 doesn't change.  This allows the ticker to get its desired height by asking
 the renderers about just one row of the model, instead of going through them
 all and resizing on every insert, delete or change.  If the model is big
@@ -1825,8 +1823,8 @@ attributes mechanism or data setup function to suppress it just for selected
 rows from the model.
 
 (Suppressing lots of rows using C<visible> might be a bit slow since
-TickerView basically must go each to see its state.  A
-C<Gtk2::TreeModelFilter> may be a better way to pick out a small number of
+TickerView basically must setup the renderers for each row to see the state.
+A C<Gtk2::TreeModelFilter> may be a better way to pick out a small number of
 desired rows from a very big model.)
 
 =head1 BUILDABLE
@@ -1851,7 +1849,7 @@ F<examples/builder.pl> in the TickerView sources for a complete program,
 
 But see L<Gtk2::Ex::CellLayout::Base/BUILDABLE INTERFACE> for caveats about
 widget superclass tags (like the "accessibility" settings) which end up
-unavailable (as of Gtk2-Perl 1.201 at least).
+unavailable (as of Gtk2-Perl 1.221 at least).
 
 =head1 OTHER NOTES
 
@@ -1871,12 +1869,12 @@ F<examples/order.pl> in the sources for a demonstration.
 
 When the model has no rows the TickerView's desired height from
 C<size_request> is zero.  This is bad if you want a visible but blank area
-when there's nothing to display.  But there's no way TickerView can work out
-a height when it's got no data at all to set into the renderers.  You can
-try calculating a fixed height from a sample model and C<set_size_request>
-to force that, or alternately have a "no data" row displaying in the model
-instead of letting it go empty, or even switch to a dummy model with a "no
-data" row when the real one is empty.
+when there's nothing to display.  However there's no way TickerView can work
+out a height when it's got no data at all to set into the renderers.  You
+can try calculating a fixed height from a sample model and
+C<set_size_request> to force that, or alternately have a "no data" row
+displaying in the model instead of letting it go empty, or even switch to a
+dummy model with a "no data" row when the real one is empty.
 
 =head2 Drawing
 
@@ -1884,17 +1882,16 @@ Cells are drawn into an off-screen pixmap which is copied to the window at
 successively advancing X positions as the ticker scrolls across.  The aim is
 to run the model fetching and cell rendering just once for each row as it
 appears on screen.  This is important because the model+renderer mechanism
-is generally much too slow to run at frame-rate times per second.
+is generally much too slow to call frame-rate times per second.
 
 The drawing for scroll movement goes through a SyncCall (see
 L<Gtk2::Ex::SyncCall>) so that after drawing one frame the next doesn't go
 out until hearing back from the server that it finished the previous.  This
 ensures a high frame rate doesn't flood the server with more drawing than it
-can keep up with, but instead ends up dynamically capped at client+server
-capability.
+can keep up with, but instead dynamically caps at client+server capability.
 
-Scroll movement amounts are calculated from elapsed time using
-C<clock_gettime(CLOCK_REALTIME)> when available, or high-res system time
+Scroll movements are calculated from elapsed time using
+C<clock_gettime(CLOCK_REALTIME)> when available or high-res system time
 otherwise (see C<Time::HiRes>).  This means the C<speed> setting is followed
 even if drawing doesn't keep up with the requested C<frame-rate>.  Slow
 frame rates can occur on the client side if the main loop is busy doing
@@ -1908,7 +1905,7 @@ L<Gtk2::Ex::CellLayout::Base>
 
 =head1 HOME PAGE
 
-L<http://www.geocities.com/user42_kevin/gtk2-ex-tickerview/index.html>
+L<http://user42.tuxfamily.org/gtk2-ex-tickerview/index.html>
 
 =head1 COPYRIGHT
 

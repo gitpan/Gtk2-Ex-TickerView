@@ -22,25 +22,14 @@ use warnings;
 use Gtk2::Ex::TickerView;
 use Test::More;
 
+use FindBin;
+use File::Spec;
+use lib File::Spec->catdir($FindBin::Bin,'inc');
+use MyTestHelpers;
+use Test::Weaken::Gtk2;
+
 require Gtk2;
-diag ("Perl-Gtk2 version ",Gtk2->VERSION);
-diag ("Perl-Glib version ",Glib->VERSION);
-diag ("Compiled against Glib version ",
-      Glib::MAJOR_VERSION(), ".",
-      Glib::MINOR_VERSION(), ".",
-      Glib::MICRO_VERSION());
-diag ("Running on       Glib version ",
-      Glib::major_version(), ".",
-      Glib::minor_version(), ".",
-      Glib::micro_version());
-diag ("Compiled against Gtk version ",
-      Gtk2::MAJOR_VERSION(), ".",
-      Gtk2::MINOR_VERSION(), ".",
-      Gtk2::MICRO_VERSION());
-diag ("Running on       Gtk version ",
-      Gtk2::major_version(), ".",
-      Gtk2::minor_version(), ".",
-      Gtk2::micro_version());
+MyTestHelpers::glib_gtk_versions();
 
 my $have_buildable = Gtk2::Ex::TickerView->isa('Gtk2::Buildable');
 diag "have_buildable: ",($have_buildable ? "yes" : "no");
@@ -48,7 +37,10 @@ if (! $have_buildable) {
   plan skip_all => 'due to no Gtk2::Buildable interface';
 }
 
-plan tests => 6;
+plan tests => 7;
+
+SKIP: { eval 'use Test::NoWarnings; 1'
+          or skip 'Test::NoWarnings not available', 1; }
 
 #------------------------------------------------------------------------------
 # buildable

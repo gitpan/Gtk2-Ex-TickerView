@@ -390,11 +390,11 @@ my $insert_count = 1;
   my $adj = Gtk2::Adjustment->new (0,
                                    $pspec->get_minimum,
                                    $pspec->get_maximum,
-                                   1, 10, 10);
+                                   1, 10, 0);
   my $hbox = Gtk2::HBox->new;
   $left_vbox->pack_start ($hbox, 0,0,0);
   $hbox->pack_start (Gtk2::Label->new('frame-rate'), 0,0,0);
-  my $spin = Gtk2::SpinButton->new ($adj, 1, 0);
+  my $spin = Gtk2::SpinButton->new ($adj, 1.0, 0);
   $hbox->pack_start ($spin, 1,1,0);
   Glib::Ex::ConnectProperties->new ([$ticker,'frame-rate'],
                                     [$spin,'value']);
@@ -404,7 +404,7 @@ my $insert_count = 1;
   my $adj = Gtk2::Adjustment->new (0,
                                    $pspec->get_minimum,
                                    $pspec->get_maximum,
-                                   1, 10, 10);
+                                   1, 10, 0);
   my $hbox = Gtk2::HBox->new;
   $left_vbox->pack_start ($hbox, 0,0,0);
   $hbox->pack_start (Gtk2::Label->new('speed'), 0,0,0);

@@ -22,32 +22,26 @@ use warnings;
 use Gtk2::Ex::TickerView;
 use Test::More;
 
-my $have_test_weaken = eval "use Test::Weaken 1.002; 1";
-if (! $have_test_weaken) {
-  plan skip_all => "due to Test::Weaken 1.002 not available -- $@";
-}
+use FindBin;
+use File::Spec;
+use lib File::Spec->catdir($FindBin::Bin,'inc');
+use MyTestHelpers;
+use Test::Weaken::Gtk2;
 
-plan tests => 5;
+# Test::Weaken 2.000 for "destructor"
+my $have_test_weaken = eval "use Test::Weaken 2.000; 1";
+if (! $have_test_weaken) {
+  plan skip_all => "due to Test::Weaken 2.000 not available -- $@";
+}
+diag ("Test::Weaken version ", Test::Weaken->VERSION);
+
+plan tests => 6;
+
+SKIP: { eval 'use Test::NoWarnings; 1'
+          or skip 'Test::NoWarnings not available', 1; }
 
 require Gtk2;
-diag ("Perl-Gtk2 version ",Gtk2->VERSION);
-diag ("Perl-Glib version ",Glib->VERSION);
-diag ("Compiled against Glib version ",
-      Glib::MAJOR_VERSION(), ".",
-      Glib::MINOR_VERSION(), ".",
-      Glib::MICRO_VERSION());
-diag ("Running on       Glib version ",
-      Glib::major_version(), ".",
-      Glib::minor_version(), ".",
-      Glib::micro_version());
-diag ("Compiled against Gtk version ",
-      Gtk2::MAJOR_VERSION(), ".",
-      Gtk2::MINOR_VERSION(), ".",
-      Gtk2::MICRO_VERSION());
-diag ("Running on       Gtk version ",
-      Gtk2::major_version(), ".",
-      Gtk2::minor_version(), ".",
-      Gtk2::micro_version());
+MyTestHelpers::glib_gtk_versions();
 
 sub wait_for_event {
   my ($widget, $signame) = @_;
@@ -78,69 +72,103 @@ sub wait_for_event {
 #-----------------------------------------------------------------------------
 
 {
-  my @weaken = Test::Weaken::poof(sub { Gtk2::Ex::TickerView->new });
-  diag "Test-Weaken ", explain \@weaken;
-  my $unfreed = @{$weaken[2]} + @{$weaken[3]};
-  is ($unfreed, 0, 'Test::Weaken deep garbage collection');
+  my $leaks = Test::Weaken::leaks (sub { Gtk2::Ex::TickerView->new });
+  is ($leaks, undef, 'deep garbage collection');
+  if ($leaks) {
+    diag "Test-Weaken ", explain $leaks;
+  }
 }
 
-is (Test::Weaken::poof(sub {
-                         my $store = Gtk2::ListStore->new ('Glib::String');
-                         my $ticker = Gtk2::Ex::TickerView->new
-                           (model => $store);
-                         [ $ticker, $store ]
-                       }),
-    0, 'Test::Weaken with a model set');
+{
+  my $leaks = Test::Weaken::leaks
+    (sub {
+       my $store = Gtk2::ListStore->new ('Glib::String');
+       my $ticker = Gtk2::Ex::TickerView->new (model => $store);
+       return [ $ticker, $store ];
+     });
+  is ($leaks, undef, 'deep garbage collection -- with a model set');
+  if ($leaks) {
+    diag "Test-Weaken ", explain $leaks;
+  }
+}
 
-is (Test::Weaken::poof(sub {
-                         my $s1 = Gtk2::ListStore->new ('Glib::String');
-                         my $ticker = Gtk2::Ex::TickerView->new
-                           (model => $s1);
-                         my $s2 = Gtk2::ListStore->new ('Glib::String');
-                         $ticker->set (model => $s2);
-                         [ $ticker, $s1, $s2 ]
-                       }),
-    0, 'Test::Weaken a model set then changed to another model');
+{
+  my $leaks = Test::Weaken::leaks
+    (sub {
+       my $s1 = Gtk2::ListStore->new ('Glib::String');
+       my $ticker = Gtk2::Ex::TickerView->new (model => $s1);
+       my $s2 = Gtk2::ListStore->new ('Glib::String');
+       $ticker->set (model => $s2);
+       return [ $ticker, $s1, $s2 ];
+     });
+  is ($leaks, undef,
+      'deep garbage collection -- with model set then changed to another');
+  if ($leaks) {
+    diag "Test-Weaken ", explain $leaks;
+  }
+}
 
 #------------------------------------------------------------------------------
 # timer run and stop
 
+Gtk2->disable_setlocale;  # leave LC_NUMERIC alone for version nums
 my $have_display = Gtk2->init_check;
 diag "have_display: ",($have_display ? "yes" : "no");
+
+sub ignore_sync_call_handler {
+  my ($ref) = @_;
+  return (ref $ref eq 'CODE'
+          && $ref == \&Gtk2::Ex::TickerView::_sync_call_handler);
+}
+
+sub my_ignore {
+  my ($ref) = @_;
+  return (ignore_sync_call_handler($ref)
+          || Test::Weaken::Gtk2::ignore_GdkDisplay($ref));
+}
 
 SKIP: {
   $have_display or skip 'due to no DISPLAY available', 2;
 
   my $timer_running;
-  my @weaken = Test::Weaken::poof
-    (sub {
-       my $store = Gtk2::ListStore->new ('Glib::String');
-       $store->set ($store->append, 0 => 'foo');
-       my $ticker = Gtk2::Ex::TickerView->new (model => $store,
-                                               width_request => 100,
-                                               height_request => 100);
-       my $renderer = Gtk2::CellRendererText->new;
-       $renderer->set (text => 'hello'); # dummy
-       $ticker->pack_start ($renderer, 0);
 
-       my $toplevel = Gtk2::Window->new ('toplevel');
-       $toplevel->add ($ticker);
-       $toplevel->show_all;
-       wait_for_event ($ticker, 'map_event');
+  my $leaks = Test::Weaken::leaks
+    ({ constructor => sub {
+         my $store = Gtk2::ListStore->new ('Glib::String');
+         $store->set ($store->append, 0 => 'foo');
+         my $ticker = Gtk2::Ex::TickerView->new (model => $store,
+                                                 width_request => 100,
+                                                 height_request => 100);
+         my $renderer = Gtk2::CellRendererText->new;
+         $renderer->set (text => 'hello'); # dummy
+         $ticker->pack_start ($renderer, 0);
 
-       $timer_running = defined $ticker->{'timer'};
-       return [ $toplevel, $ticker, $renderer, $store ];
-     },
-     sub {
-       my ($aref) = @_;
-       my $toplevel = $aref->[0];
-       $toplevel->destroy;
+         my $toplevel = Gtk2::Window->new ('toplevel');
+         $toplevel->add ($ticker);
+         $toplevel->show_all;
+         wait_for_event ($ticker, 'map_event');
+
+         $timer_running = defined $ticker->{'timer'};
+         return [ $toplevel, $ticker, $renderer, $store ];
+       },
+       destructor => \&Test::Weaken::Gtk2::destructor_destroy,
+       ignore => \&my_ignore,
      });
   ok ($timer_running, 'toplevel shown - timer runs');
 
-  diag "Test-Weaken ", explain \@weaken;
-  my $unfreed = @{$weaken[2]} + @{$weaken[3]};
-  is ($unfreed, 0, 'Test::Weaken deep garbage collection -- running timer');
+  is ($leaks, undef, 'deep garbage collection -- running timer');
+  if ($leaks) {
+    diag "Test-Weaken ", explain $leaks;
+
+    my $unfreed = $leaks->unfreed_proberefs;
+    foreach my $proberef (@$unfreed) {
+      diag "  unfreed $proberef";
+    }
+    foreach my $proberef (@$unfreed) {
+      diag "  search $proberef";
+      MyTestHelpers::findrefs($proberef);
+    }
+  }
 }
 
 exit 0;

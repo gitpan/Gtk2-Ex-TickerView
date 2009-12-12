@@ -1,5 +1,5 @@
 This file contains message digests of all files listed in MANIFEST,
-signed via the Module::Signature module, version 0.55.
+signed via the Module::Signature module, version 0.61.
 
 To verify the content in this distribution, first make sure you have
 Module::Signature installed, then type:
@@ -14,42 +14,52 @@ not run its Makefile.PL or Build.PL.
 -----BEGIN PGP SIGNED MESSAGE-----
 Hash: SHA1
 
-SHA1 8624bcdae55baeef00cd11d5dfcfa60f68710a02 COPYING
-SHA1 6b71690e1f416435738ee98ded61b65852ce59bc Changes
-SHA1 6a85766c11ae595cf92fb2f9c90395e1372a4fd7 MANIFEST
-SHA1 4d5d508b1d666157c1bfcf441dc159f079e3ef68 MANIFEST.SKIP
-SHA1 384b390720b6dec84b8a58a83d0732c042c9d9e1 META.yml
-SHA1 8eb2d9ad63c9c329b6cf6133e4bf920fc8df15e0 Makefile.PL
-SHA1 28febfdd72a36a06a969acf9785c5bd8db47aa5c README
-SHA1 4f871e3bfbd731c4b8cc3a24cc417d13cd46d873 debian/changelog
-SHA1 1b6453892473a467d07372d45eb05abc2031647a debian/compat
-SHA1 f3df2517cb968ef49ff899b6264885ae75a68f69 debian/control
-SHA1 03bbd5a133c50f443068a17178445dfcb2b5718e debian/copyright
-SHA1 33917358a6e8c59409c20d1540da1780abd352f2 debian/rules
-SHA1 477b4135453a9311ad08c225f023f991575ef04a debian/watch
+SHA1 842745cb706f8f2126506f544492f7a80dbe29b3 COPYING
+SHA1 e596c9b057053bb3d3a954bcad34cef27f3ad75a Changes
+SHA1 0f9e9d21dc1ef7ede5b2f500780444eb6465fe2f MANIFEST
+SHA1 bb78fa7bf2dfebdda59c9efb64db51b173fb9e2f MANIFEST.SKIP
+SHA1 d25c8ad9e8718eb19960cea1e6426b67c4307c94 META.yml
+SHA1 e9cb4f7980642f353aafaaca42291fbc35cba4b1 Makefile.PL
+SHA1 3e3c601a54f8f3fb57a1d69ef692a9f977e15b85 README
+SHA1 17cbfae35058b40ab2bf05df92bc015fcb6fc1b8 debian/changelog
+SHA1 ac3478d69a3c81fa62e60f5c3696165a4e5e6ac4 debian/compat
+SHA1 b9d8ea82b574896d13cfdf046c904f9645e54904 debian/control
+SHA1 0aaec44e71d2d001e20b5f08e4300c6ac65d1932 debian/copyright
+SHA1 2bfbe5d3ea340755b78b162572141eda8d474444 debian/patches/pod-examples-dir.diff
+SHA1 8038e74813b8dd23df6433cac4c144e4ba39f57f debian/rules
+SHA1 5b9b1fe571205f0566805d079f764953931d318e debian/watch
+SHA1 d066cb2016ff35da90e049b6b4f2cba4acdee1ab devel/Pause.pm
 SHA1 1449ff40917ba9a74e89af73f187b2434b7bb541 devel/buildable.pl
 SHA1 9af00e8470819bad347fb50fc8f91794aa73e64a devel/clock-gettime.pl
 SHA1 7b6af02b60dbcace7d3823def626d609cc968daa devel/display.t
 SHA1 6940937123b46fc6581fbf06ee88da588086f3b5 devel/refilter.pl
-SHA1 b82c5ed32e5b2f774ba103a22a6a8867a50f5f69 devel/run.pl
+SHA1 c5163bda373c355c4e2b6a47295e7e5f821d37c4 devel/run.pl
 SHA1 740991c86398fde1c7bc5af47a3c3acf62c10d38 devel/window-move.pl
 SHA1 827688aa82b2ecbb4307bc3eddfa30079eacc988 examples/builder.pl
 SHA1 f2bd55d9c19fbe645cd7097bda37749b9c7a6082 examples/financequote.pl
-SHA1 f50c9469bad2550444eac3d55b5e4b57feba7825 examples/news.pl
+SHA1 1f7a712d30e26b07daf092d608a03a1646d8ec55 examples/news.pl
 SHA1 ccdf373665eb792e119ce05842757aa5f2ea335c examples/order.pl
-SHA1 ce2ae83582154681d1503117fa2e56189aff0716 examples/poe-yahoo-quotes.pl
-SHA1 01edb777a545b6a8f0f1b6365dc874b9bed15056 examples/rottext-vertical.pl
+SHA1 299ea7c6099f150152628483817df9d5bfbd57fb examples/poe-yahoo-quotes.pl
+SHA1 b064e6d6c9ad0aa7fcbaaa52d6a609029ef29d9e examples/rottext-vertical.pl
 SHA1 cb8199b0b27283b0cb8a924cb1478e05b12f5cb0 examples/simple.pl
 SHA1 82f14a8efcaa0ec9b48d28977c27636b95663478 examples/vertical.pl
-SHA1 3b214e1cd66032ffb73835f3d1b158cd8fda27e4 lib/Gtk2/Ex/TickerView.pm
-SHA1 c53d23aa9a8f2a7acfd5772e3a447d0b935dedab t/TickerView.t
-SHA1 1773c60dc80c47972f83f6b9d854969de6d238ea t/buildable.t
-SHA1 a661a39e55a4127aecb1b97a631c4f01f7dce8c6 t/pod.t
-SHA1 f5376a4976fd475a682512d1d9dbb44c53eef858 t/test-weaken.t
+SHA1 b70409e3868693781f7667ae90f75a183b1e421e examples/wrap-width.pl
+SHA1 fff676a9981e20e51d8987b36323b1227a5945ee inc/MyMakeMakerExtras.pm
+SHA1 68d5f3c7062d72f21169e09a132b91c12ad5551a lib/Gtk2/Ex/TickerView.pm
+SHA1 378b932305fb60823467c2af3c771fe3fc295a13 t/0-META-read.t
+SHA1 a343ed4dce96d05de51eed1ec065911584b96fce t/0-Test-DistManifest.t
+SHA1 bba0dc087cbe64d8f100ab77e6cef061c0bebf27 t/0-Test-Pod.t
+SHA1 5fa94e1e88e44064d1e6b21c88a4c9374a17bfd1 t/0-Test-Synopsis.t
+SHA1 d369522d8a9a887fdf1a1e14cb83e25fa2188727 t/0-Test-YAML-Meta.t
+SHA1 f72c33815ea5926e03b0d123c28422a04e2277f4 t/TickerView.t
+SHA1 58b75d7190f60d98c36f0150c5cf5a22fd9cd173 t/buildable.t
+SHA1 7e65c1ad5410e42561d9864258715047b760a89a t/inc/MyTestHelpers.pm
+SHA1 160af26afa100c9d36471d82634044510bbf8c1f t/inc/Test/Weaken/Gtk2.pm
+SHA1 ffa70b1b394d5c7ed49930934d66e38ba97ca284 t/test-weaken.t
 -----BEGIN PGP SIGNATURE-----
-Version: GnuPG v1.4.9 (GNU/Linux)
+Version: GnuPG v1.4.10 (GNU/Linux)
 
-iD8DBQFJgiLNLFMCIV9q3ToRAloLAJ9rBqCUwPMJARaHiwNwLU410y5khwCdGKug
-IhRXd99G1dLBvCRyIJN4V0k=
-=Tt8U
+iD8DBQFLJAZ/LFMCIV9q3ToRAhLnAJ9O8CS8mSUmpD0QrSjrop1wGk3E/gCgsvQQ
+ey/CFuIsMqPBVczguo8WtIQ=
+=Qbuy
 -----END PGP SIGNATURE-----

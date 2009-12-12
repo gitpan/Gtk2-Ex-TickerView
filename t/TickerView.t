@@ -20,48 +20,39 @@
 use strict;
 use warnings;
 use Gtk2::Ex::TickerView;
-use Test::More tests => 45;
+use Test::More tests => 50;
 
-my $want_version = 12;
-ok ($Gtk2::Ex::TickerView::VERSION >= $want_version, 'VERSION variable');
-ok (Gtk2::Ex::TickerView->VERSION  >= $want_version, 'VERSION class method');
-Gtk2::Ex::TickerView->VERSION ($want_version);
-{
-  my $ticker = Gtk2::Ex::TickerView->new;
-  ok ($ticker->VERSION >= $want_version, 'VERSION object method');
-  $ticker->VERSION ($want_version);
+use FindBin;
+use File::Spec;
+use lib File::Spec->catdir($FindBin::Bin,'inc');
+use MyTestHelpers;
+use Test::Weaken::Gtk2;
+
+SKIP: { eval 'use Test::NoWarnings; 1'
+          or skip 'Test::NoWarnings not available', 1; }
+
+my $want_version = 13;
+cmp_ok ($Gtk2::Ex::TickerView::VERSION, '>=', $want_version,
+        'VERSION variable');
+cmp_ok (Gtk2::Ex::TickerView->VERSION,  '>=', $want_version,
+        'VERSION class method');
+{ ok (eval { Gtk2::Ex::TickerView->VERSION($want_version); 1 },
+      "VERSION class check $want_version");
+  my $check_version = $want_version + 1000;
+  ok (! eval { Gtk2::Ex::TickerView->VERSION($check_version); 1 },
+      "VERSION class check $check_version");
+}
+{ my $ticker = Gtk2::Ex::TickerView->new;
+  cmp_ok ($ticker->VERSION, '>=', $want_version, 'VERSION object method');
+  ok (eval { $ticker->VERSION($want_version); 1 },
+      "VERSION object check $want_version");
+  my $check_version = $want_version + 1000;
+  ok (! eval { $ticker->VERSION($check_version); 1 },
+      "VERSION object check $check_version");
 }
 
 require Gtk2;
-diag ("Perl-Gtk2 version ",Gtk2->VERSION);
-diag ("Perl-Glib version ",Glib->VERSION);
-diag ("Compiled against Glib version ",
-      Glib::MAJOR_VERSION(), ".",
-      Glib::MINOR_VERSION(), ".",
-      Glib::MICRO_VERSION());
-diag ("Running on       Glib version ",
-      Glib::major_version(), ".",
-      Glib::minor_version(), ".",
-      Glib::micro_version());
-diag ("Compiled against Gtk version ",
-      Gtk2::MAJOR_VERSION(), ".",
-      Gtk2::MINOR_VERSION(), ".",
-      Gtk2::MICRO_VERSION());
-diag ("Running on       Gtk version ",
-      Gtk2::major_version(), ".",
-      Gtk2::minor_version(), ".",
-      Gtk2::micro_version());
-
-# return true if there's any signal handlers connected to $obj
-sub any_signal_connections {
-  my ($obj) = @_;
-  my @connected = grep {$obj->signal_handler_is_connected ($_)} (0 .. 500);
-  if (@connected) {
-    diag "$obj signal handlers connected: ",join(' ',@connected),"\n";
-    return 1;
-  }
-  return 0;
-}
+MyTestHelpers::glib_gtk_versions();
 
 ## no critic (ProtectPrivateSubs)
 
@@ -276,7 +267,7 @@ sub any_signal_connections {
   my $store = Gtk2::ListStore->new ('Glib::String');
   my $ticker = Gtk2::Ex::TickerView->new (model => $store);
   $ticker->set (model => undef);
-  ok (! any_signal_connections ($store),
+  ok (! MyTestHelpers::any_signal_connections ($store),
       'no signal handlers left on model when unset');
 }
 

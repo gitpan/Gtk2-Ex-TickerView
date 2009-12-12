@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# Copyright 2007, 2008 Kevin Ryde
+# Copyright 2007, 2008, 2009 Kevin Ryde
 
 # This file is part of Gtk2-Ex-TickerView.
 #
@@ -103,7 +103,7 @@ sub timer_callback {
   my $str = POSIX::strftime ("News time <tt>%H:%M:%S</tt>",
                              localtime (time()));
   $liststore->set_value ($liststore->get_iter_first, 0, $str);
-  return 1; # Glib::SOURCE_CONTINUE, continue timer
+  return 1; # Glib::SOURCE_CONTINUE
 }
 timer_callback();                            # initial time display
 Glib::Timeout->add (1000, \&timer_callback); # periodic updates

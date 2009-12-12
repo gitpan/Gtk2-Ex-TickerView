@@ -118,17 +118,17 @@ sub RENDER {
 #
 sub _get_layout {
   my ($self, $widget) = @_;
-  my $layout = $widget->create_pango_layout ('');
+
+  my $text = $self->get('text');
+  if (! defined $text) { $text = ''; }
+  my $layout = $widget->create_pango_layout ($text);
+  $layout->set_single_paragraph_mode ($self->get('single-paragraph-mode'));
 
   # ENHANCE-ME: this would be the point to apply the various 'foreground'
   # and whatnot attributes of CellRendererText ...
 
-  $layout->set_single_paragraph_mode ($self->get('single-paragraph-mode'));
-  if (defined (my $text = $self->get('text'))) {
-    $layout->set_text ($text);
-  }
-
   if (my $rotation = POSIX::fmod ($self->{'rotation'}, 360)) {
+    # make a matrix if rotation not zero
     if (DEBUG) { print " rotate $rotation\n"; }
     my $context = $layout->get_context;
     my $matrix = Gtk2::Pango::Matrix->new;
@@ -176,14 +176,15 @@ my $label = Gtk2::Label->new (<<"HERE");
 
 This is some silliness
 scrolling text vertically
-rotated by custom renderers.
+rotated using custom
+renderers.
 
-Can the core text
+Can the gtk text
 renderer rotate?  If so
 the fiddling about here
 is a bit embarrassing,
 though it's an example
-of how the the TickerView
+of how the TickerView
 doesn't care what or how
 the renderers draw.
 

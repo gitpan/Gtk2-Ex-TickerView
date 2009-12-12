@@ -17,6 +17,9 @@ with Gtk2-Ex-TickerView.  If not, see <http://www.gnu.org/licenses/>.
 
 
 
+Version 13, December 2009
+    - depend on Gtk2::Ex::SyncCall 12 for gtk XID workaround
+
 Version 12, January 2009
     - pixmap shifting for less redraws
     - fix for backwards drag in vertical mode

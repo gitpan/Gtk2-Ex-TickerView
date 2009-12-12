@@ -35,4 +35,4 @@ RtoL mode scrolls right to left, and vertical mode scrolls up and down.
 The prerequisites are Gtk2-Perl and my CellLayout-Base, WidgetBits and
 ObjectBits helpers.  The TickerView home page is
 
-http://www.geocities.com/user42_kevin/gtk2-ex-tickerview/index.html
+    http://user42.tuxfamily.org/gtk2-ex-tickerview/index.html

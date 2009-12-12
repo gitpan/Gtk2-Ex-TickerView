@@ -4,11 +4,13 @@ debian/changelog
 debian/compat
 debian/control
 debian/copyright
+debian/patches/pod-examples-dir.diff
 debian/rules
 debian/watch
 devel/buildable.pl
 devel/clock-gettime.pl
 devel/display.t
+devel/Pause.pm
 devel/refilter.pl
 devel/run.pl
 devel/window-move.pl
@@ -20,14 +22,22 @@ examples/poe-yahoo-quotes.pl
 examples/rottext-vertical.pl
 examples/simple.pl
 examples/vertical.pl
+examples/wrap-width.pl
+inc/MyMakeMakerExtras.pm
 lib/Gtk2/Ex/TickerView.pm
 Makefile.PL
 MANIFEST			This list of files
 MANIFEST.SKIP
 README
 SIGNATURE
+t/0-META-read.t
+t/0-Test-DistManifest.t
+t/0-Test-Pod.t
+t/0-Test-Synopsis.t
+t/0-Test-YAML-Meta.t
 t/buildable.t
-t/pod.t
+t/inc/MyTestHelpers.pm
+t/inc/Test/Weaken/Gtk2.pm
 t/test-weaken.t
 t/TickerView.t
 META.yml                                 Module meta-data (added by MakeMaker)
