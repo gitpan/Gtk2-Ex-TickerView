@@ -34,7 +34,7 @@ use Gtk2::Ex::CellLayout::Base 4;  # version 4 for _cellinfo_starts()
 our @ISA;
 push @ISA, 'Gtk2::Ex::CellLayout::Base';
 
-our $VERSION = 13;
+our $VERSION = 14;
 
 # set this to 1 for some diagnostic prints, or 2 for even more prints
 use constant DEBUG => 0;

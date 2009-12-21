@@ -34,19 +34,22 @@ MyMakeMakerExtras::WriteMakefile
 
    MIN_PERL_VERSION => '5.008',
    PREREQ_PM    => {
+                    'Glib' => 0,
+                    'Glib::Object::Subclass' => 0,
+
                     # need 1.180 or higher to be able to implement
                     # Gtk2::CellLayout as a GInterface
                     'Gtk2' => '1.180',
 
-                    # want version 2 for its Gtk2::Buildable support
-                    'Gtk2::Ex::CellLayout::Base' => 2,
+                    # version 4 for _cellinfo_starts
+                    'Gtk2::Ex::CellLayout::Base' => 4,
 
                     # my Gtk2-Ex-WidgetBits
                     'Gtk2::Ex::SyncCall' => 12,
 
                     # my Glib-Ex-ObjectBits
                     'Glib::Ex::SignalIds' => 0,
-                    'Glib::Ex::SourceIds' => 0,
+                    'Glib::Ex::SourceIds' => 2,  # new in version 2
                    },
 
 
@@ -59,6 +62,7 @@ MyMakeMakerExtras::WriteMakefile
         => { maximum_tests
              => { description => 'Have "make test" do as much as possible.',
                   requires => { 'Test::Weaken' => '2.000',
+                                'Devel::FindRef' => 0,
                               },
                 },
              maximum_examples

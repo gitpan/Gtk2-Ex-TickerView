@@ -15,19 +15,19 @@ not run its Makefile.PL or Build.PL.
 Hash: SHA1
 
 SHA1 842745cb706f8f2126506f544492f7a80dbe29b3 COPYING
-SHA1 e596c9b057053bb3d3a954bcad34cef27f3ad75a Changes
-SHA1 0f9e9d21dc1ef7ede5b2f500780444eb6465fe2f MANIFEST
+SHA1 856f8a7c3e4d6fecf27b35d28c4775a3132d326e Changes
+SHA1 aca350d5ef71b11832302db3db11e8508ae82d35 MANIFEST
 SHA1 bb78fa7bf2dfebdda59c9efb64db51b173fb9e2f MANIFEST.SKIP
-SHA1 d25c8ad9e8718eb19960cea1e6426b67c4307c94 META.yml
-SHA1 e9cb4f7980642f353aafaaca42291fbc35cba4b1 Makefile.PL
+SHA1 7949de08e8c9006ae258b6f24f21f1034167a7da META.yml
+SHA1 612f85f7e181f21a74930443ac7b5e8cfbc250cd Makefile.PL
 SHA1 3e3c601a54f8f3fb57a1d69ef692a9f977e15b85 README
-SHA1 17cbfae35058b40ab2bf05df92bc015fcb6fc1b8 debian/changelog
+SHA1 20d1e556caf96f15ad786b799a96c456b097da2b debian/changelog
 SHA1 ac3478d69a3c81fa62e60f5c3696165a4e5e6ac4 debian/compat
-SHA1 b9d8ea82b574896d13cfdf046c904f9645e54904 debian/control
+SHA1 aea64b75ed6959b8971172b4eabb6eff4b8b923a debian/control
 SHA1 0aaec44e71d2d001e20b5f08e4300c6ac65d1932 debian/copyright
 SHA1 2bfbe5d3ea340755b78b162572141eda8d474444 debian/patches/pod-examples-dir.diff
 SHA1 8038e74813b8dd23df6433cac4c144e4ba39f57f debian/rules
-SHA1 5b9b1fe571205f0566805d079f764953931d318e debian/watch
+SHA1 26b99e374b7801d6e59bae6ad141af149ea3cbb7 debian/watch
 SHA1 d066cb2016ff35da90e049b6b4f2cba4acdee1ab devel/Pause.pm
 SHA1 1449ff40917ba9a74e89af73f187b2434b7bb541 devel/buildable.pl
 SHA1 9af00e8470819bad347fb50fc8f91794aa73e64a devel/clock-gettime.pl
@@ -44,22 +44,24 @@ SHA1 b064e6d6c9ad0aa7fcbaaa52d6a609029ef29d9e examples/rottext-vertical.pl
 SHA1 cb8199b0b27283b0cb8a924cb1478e05b12f5cb0 examples/simple.pl
 SHA1 82f14a8efcaa0ec9b48d28977c27636b95663478 examples/vertical.pl
 SHA1 b70409e3868693781f7667ae90f75a183b1e421e examples/wrap-width.pl
-SHA1 fff676a9981e20e51d8987b36323b1227a5945ee inc/MyMakeMakerExtras.pm
-SHA1 68d5f3c7062d72f21169e09a132b91c12ad5551a lib/Gtk2/Ex/TickerView.pm
+SHA1 d3fbfce26c102ec67851cf8406aa06d1ea11063e inc/MyMakeMakerExtras.pm
+SHA1 8e7135d2f4d47aa887d445680ae286400639f7b6 inc/my_pod2html
+SHA1 d35e99c18aad6485b8e1f7c151c92aa9e2d45814 lib/Gtk2/Ex/TickerView.pm
 SHA1 378b932305fb60823467c2af3c771fe3fc295a13 t/0-META-read.t
 SHA1 a343ed4dce96d05de51eed1ec065911584b96fce t/0-Test-DistManifest.t
 SHA1 bba0dc087cbe64d8f100ab77e6cef061c0bebf27 t/0-Test-Pod.t
 SHA1 5fa94e1e88e44064d1e6b21c88a4c9374a17bfd1 t/0-Test-Synopsis.t
 SHA1 d369522d8a9a887fdf1a1e14cb83e25fa2188727 t/0-Test-YAML-Meta.t
-SHA1 f72c33815ea5926e03b0d123c28422a04e2277f4 t/TickerView.t
+SHA1 9df4120f2958556cd810905bfb68868b7e004b9a t/TickerView.t
 SHA1 58b75d7190f60d98c36f0150c5cf5a22fd9cd173 t/buildable.t
-SHA1 7e65c1ad5410e42561d9864258715047b760a89a t/inc/MyTestHelpers.pm
-SHA1 160af26afa100c9d36471d82634044510bbf8c1f t/inc/Test/Weaken/Gtk2.pm
-SHA1 ffa70b1b394d5c7ed49930934d66e38ba97ca284 t/test-weaken.t
+SHA1 f1effdaf8e1b594668490ce2d0e3375ac45443cc t/inc/MyTestHelpers.pm
+SHA1 654e5f136e3481f25fa0507a7cb60ec6bc5b18d9 t/inc/Test/Weaken/ExtraBits.pm
+SHA1 6aad0e60f2a7061d19062d5f0ec3777513bf6e59 t/inc/Test/Weaken/Gtk2.pm
+SHA1 78ae84d32e7f9e2de77ae3722656d495821716a5 t/test-weaken.t
 -----BEGIN PGP SIGNATURE-----
 Version: GnuPG v1.4.10 (GNU/Linux)
 
-iD8DBQFLJAZ/LFMCIV9q3ToRAhLnAJ9O8CS8mSUmpD0QrSjrop1wGk3E/gCgsvQQ
-ey/CFuIsMqPBVczguo8WtIQ=
-=Qbuy
+iD8DBQFLLyl+LFMCIV9q3ToRAnb9AJ9TNml9biDnlfALKy/VUtV5SJWpCACfQ0PZ
+M8j6ozvGCfqfMCs11NoJs2U=
+=kCrO
 -----END PGP SIGNATURE-----

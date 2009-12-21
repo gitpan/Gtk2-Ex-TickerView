@@ -24,4 +24,4 @@
 
 version=3
 http://user42.tuxfamily.org/gtk2-ex-tickerview/index.html \
-	.*/Gtk2-Ex-TickerView-([0-9]+)\.tgz
+	.*/Gtk2-Ex-TickerView-([0-9]+)\.tar\.gz

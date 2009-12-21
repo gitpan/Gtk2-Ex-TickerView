@@ -31,7 +31,7 @@ use Test::Weaken::Gtk2;
 SKIP: { eval 'use Test::NoWarnings; 1'
           or skip 'Test::NoWarnings not available', 1; }
 
-my $want_version = 13;
+my $want_version = 14;
 cmp_ok ($Gtk2::Ex::TickerView::VERSION, '>=', $want_version,
         'VERSION variable');
 cmp_ok (Gtk2::Ex::TickerView->VERSION,  '>=', $want_version,

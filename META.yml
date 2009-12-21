@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Gtk2-Ex-TickerView
-version:            13
+version:            14
 abstract:           Scrolling ticker or newsbar view widget.
 author:
     - Kevin Ryde <user42@zip.com.au>
@@ -11,10 +11,12 @@ configure_requires:
 build_requires:
     ExtUtils::MakeMaker:  0
 requires:
+    Glib:                 0
     Glib::Ex::SignalIds:  0
-    Glib::Ex::SourceIds:  0
+    Glib::Ex::SourceIds:  2
+    Glib::Object::Subclass:  0
     Gtk2:                 1.180
-    Gtk2::Ex::CellLayout::Base:  2
+    Gtk2::Ex::CellLayout::Base:  4
     Gtk2::Ex::SyncCall:   12
     perl:                 5.008
 resources:
@@ -52,10 +54,12 @@ optional_features:
     maximum_tests:
         description:  Have "make test" do as much as possible.
         requires:
+            Devel::FindRef:      0
             Parse::CPAN::Meta:   0
             Test::DistManifest:  0
             Test::NoWarnings:    0
             Test::Pod:           1.00
+            Test::Synopsis:      0
             Test::Weaken:        2.000
             Test::YAML::Meta:    0.13
             YAML:                0

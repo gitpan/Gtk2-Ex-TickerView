@@ -17,6 +17,9 @@ with Gtk2-Ex-TickerView.  If not, see <http://www.gnu.org/licenses/>.
 
 
 
+Version 14, December 2009
+    - fix Makefile/META dependencies on Gtk2::Ex::CellLayout::Base
+
 Version 13, December 2009
     - depend on Gtk2::Ex::SyncCall 12 for gtk XID workaround
 

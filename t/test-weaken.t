@@ -27,6 +27,7 @@ use File::Spec;
 use lib File::Spec->catdir($FindBin::Bin,'inc');
 use MyTestHelpers;
 use Test::Weaken::Gtk2;
+use Test::Weaken::ExtraBits;
 
 # Test::Weaken 2.000 for "destructor"
 my $have_test_weaken = eval "use Test::Weaken 2.000; 1";
@@ -42,31 +43,6 @@ SKIP: { eval 'use Test::NoWarnings; 1'
 
 require Gtk2;
 MyTestHelpers::glib_gtk_versions();
-
-sub wait_for_event {
-  my ($widget, $signame) = @_;
-  my $done = 0;
-  my $sig_id = $widget->signal_connect ($signame => sub {
-                                          $done = 1;
-                                          return 0; # Gtk2::EVENT_PROPAGATE
-                                        });
-  my $timer_id = Glib::Timeout->add (30_000, # 30 seconds
-                                     sub {
-                                       print "Oops, timeout on $signame";
-                                       exit 1;
-                                     });
-  $widget->get_display->sync;
-
-  my $count = 0;
-  while (! $done) {
-    Gtk2->main_iteration;
-    $count++;
-  }
-  diag "wait_for_event('$signame'): ran $count events/iterations\n";
-
-  $widget->signal_handler_disconnect ($sig_id);
-  Glib::Source->remove ($timer_id);
-}
 
 
 #-----------------------------------------------------------------------------
@@ -115,16 +91,10 @@ Gtk2->disable_setlocale;  # leave LC_NUMERIC alone for version nums
 my $have_display = Gtk2->init_check;
 diag "have_display: ",($have_display ? "yes" : "no");
 
-sub ignore_sync_call_handler {
-  my ($ref) = @_;
-  return (ref $ref eq 'CODE'
-          && $ref == \&Gtk2::Ex::TickerView::_sync_call_handler);
-}
-
 sub my_ignore {
   my ($ref) = @_;
-  return (ignore_sync_call_handler($ref)
-          || Test::Weaken::Gtk2::ignore_GdkDisplay($ref));
+  return (Test::Weaken::ExtraBits::ignore_function($ref,'Gtk2::Ex::TickerView::_sync_call_handler')
+          || Test::Weaken::Gtk2::ignore_default_GdkDisplay($ref));
 }
 
 SKIP: {
@@ -146,7 +116,7 @@ SKIP: {
          my $toplevel = Gtk2::Window->new ('toplevel');
          $toplevel->add ($ticker);
          $toplevel->show_all;
-         wait_for_event ($ticker, 'map_event');
+         MyTestHelpers::wait_for_event ($ticker, 'map-event');
 
          $timer_running = defined $ticker->{'timer'};
          return [ $toplevel, $ticker, $renderer, $store ];

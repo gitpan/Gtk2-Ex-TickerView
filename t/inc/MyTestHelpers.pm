@@ -23,12 +23,12 @@ use warnings;
 
 use base 'Exporter';
 use vars qw(@EXPORT_OK %EXPORT_TAGS);
-our @EXPORT_OK = qw(findrefs
-                    main_iterations
-                    warn_suppress_gtk_icon
-                    glib_gtk_versions
-                    any_signal_connections);
-our %EXPORT_TAGS = (all => \@EXPORT_OK);
+@EXPORT_OK = qw(findrefs
+                main_iterations
+                warn_suppress_gtk_icon
+                glib_gtk_versions
+                any_signal_connections);
+%EXPORT_TAGS = (all => \@EXPORT_OK);
 
 use constant DEBUG => 0;
 
@@ -73,7 +73,7 @@ sub main_iterations {
 
 # Eg,
 #     my $something = do {
-#       local $SIG{'__WARN__'} = \&warn_suppress_gtk_icon;
+#       local $SIG{'__WARN__'} = \&MyTestHelpers::warn_suppress_gtk_icon;
 #       SomeThing->new;
 #     };
 #
@@ -124,6 +124,36 @@ sub any_signal_connections {
     return $connected;
   }
   return undef;
+}
+
+# wait for $signame to be emitted on $widget, with a timeout
+sub wait_for_event {
+  my ($widget, $signame) = @_;
+  my $done = 0;
+  my $got_event = 0;
+  my $sig_id = $widget->signal_connect
+    ($signame => sub {
+       $done = 1;
+       return 0; # Gtk2::EVENT_PROPAGATE
+     });
+  my $timer_id = Glib::Timeout->add
+    (30_000, # 30 seconds
+     sub {
+       $done = 1;
+       Test::More::diag ("oops, timeout waiting for $signame");
+       return 1; # Glib::SOURCE_CONTINUE
+     });
+  $widget->get_display->sync;
+
+  my $count = 0;
+  while (! $done) {
+    Gtk2->main_iteration;
+    $count++;
+  }
+  Test::More::diag ("wait_for_event('$signame'): ran $count events/iterations\n");
+
+  $widget->signal_handler_disconnect ($sig_id);
+  Glib::Source->remove ($timer_id);
 }
 
 1;
