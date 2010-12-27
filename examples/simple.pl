@@ -1,6 +1,6 @@
-#!/usr/bin/perl
+#!/usr/bin/perl -w
 
-# Copyright 2007, 2008 Kevin Ryde
+# Copyright 2007, 2008, 2010 Kevin Ryde
 
 # This file is part of Gtk2-Ex-TickerView.
 #

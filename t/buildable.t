@@ -1,6 +1,6 @@
-#!/usr/bin/perl
+#!/usr/bin/perl -w
 
-# Copyright 2007, 2008, 2009 Kevin Ryde
+# Copyright 2007, 2008, 2009, 2010 Kevin Ryde
 
 # This file is part of Gtk2-Ex-TickerView.
 #
@@ -22,25 +22,17 @@ use warnings;
 use Gtk2::Ex::TickerView;
 use Test::More;
 
-use FindBin;
-use File::Spec;
-use lib File::Spec->catdir($FindBin::Bin,'inc');
+use lib 't';
 use MyTestHelpers;
-use Test::Weaken::Gtk2;
+BEGIN { MyTestHelpers::nowarnings() }
 
 require Gtk2;
 MyTestHelpers::glib_gtk_versions();
 
-my $have_buildable = Gtk2::Ex::TickerView->isa('Gtk2::Buildable');
-diag "have_buildable: ",($have_buildable ? "yes" : "no");
-if (! $have_buildable) {
-  plan skip_all => 'due to no Gtk2::Buildable interface';
-}
+Gtk2::Ex::TickerView->isa('Gtk2::Buildable')
+  or plan skip_all => 'due to no Gtk2::Buildable interface';
 
-plan tests => 7;
-
-SKIP: { eval 'use Test::NoWarnings; 1'
-          or skip 'Test::NoWarnings not available', 1; }
+plan tests => 6;
 
 #------------------------------------------------------------------------------
 # buildable

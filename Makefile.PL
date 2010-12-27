@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# Copyright 2007, 2008, 2009 Kevin Ryde
+# Copyright 2007, 2008, 2009, 2010 Kevin Ryde
 
 # This file is part of Gtk2-Ex-TickerView.
 #
@@ -48,7 +48,7 @@ MyMakeMakerExtras::WriteMakefile
                     'Gtk2::Ex::SyncCall' => 12,
 
                     # my Glib-Ex-ObjectBits
-                    'Glib::Ex::SignalIds' => 0,
+                    'Glib::Ex::SignalIds' => 1,
                     'Glib::Ex::SourceIds' => 2,  # new in version 2
                    },
 
@@ -62,6 +62,7 @@ MyMakeMakerExtras::WriteMakefile
         => { maximum_tests
              => { description => 'Have "make test" do as much as possible.',
                   requires => { 'Test::Weaken' => '2.000',
+                                'Test::Weaken::Gtk2' => 24,
                                 'Devel::FindRef' => 0,
                               },
                 },

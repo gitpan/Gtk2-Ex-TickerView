@@ -1,4 +1,4 @@
-# Copyright 2007, 2008, 2009 Kevin Ryde
+# Copyright 2007, 2008, 2009, 2010 Kevin Ryde
 
 # This file is part of Gtk2-Ex-TickerView.
 #
@@ -34,7 +34,7 @@ use Gtk2::Ex::CellLayout::Base 4;  # version 4 for _cellinfo_starts()
 our @ISA;
 push @ISA, 'Gtk2::Ex::CellLayout::Base';
 
-our $VERSION = 14;
+our $VERSION = 15;
 
 # set this to 1 for some diagnostic prints, or 2 for even more prints
 use constant DEBUG => 0;
@@ -60,6 +60,7 @@ use Glib::Object::Subclass
                button_press_event      => \&_do_button_press_event,
                motion_notify_event     => \&_do_motion_notify_event,
                button_release_event    => \&_do_button_release_event,
+               scroll_event            => \&_do_scroll_event,
                visibility_notify_event => \&_do_visibility_notify_event,
                direction_changed       => \&_do_direction_changed,
                map                     => \&_do_map_or_unmap,
@@ -71,21 +72,21 @@ use Glib::Object::Subclass
              },
   properties => [ Glib::ParamSpec->object
                   ('model',
-                   'model',
+                   'Model object',
                    'TreeModel giving the items to display.',
                    'Gtk2::TreeModel',
                    Glib::G_PARAM_READWRITE),
 
                   Glib::ParamSpec->boolean
                   ('run',
-                   'run',
+                   'Run ticker',
                    'Whether to run the ticker, ie. scroll across.',
                    1, # default yes
                    Glib::G_PARAM_READWRITE),
 
                   Glib::ParamSpec->double
                   ('speed',
-                   'speed',
+                   'Speed',
                    'Speed to move the items across, in pixels per second.',
                    0, POSIX::DBL_MAX(),
                    DEFAULT_SPEED,
@@ -93,7 +94,7 @@ use Glib::Object::Subclass
 
                   Glib::ParamSpec->double
                   ('frame-rate',
-                   'frame-rate',
+                   'Frame rate',
                    'How many times per second to move for scrolling.',
                    0, POSIX::DBL_MAX(),
                    DEFAULT_FRAME_RATE,
@@ -101,14 +102,14 @@ use Glib::Object::Subclass
 
                   Glib::ParamSpec->boolean
                   ('fixed-height-mode',
-                   'fixed-height-mode',
+                   'Fixed height mode',
                    'Assume all cells have the same desired height.',
                    0, # default no
                    Glib::G_PARAM_READWRITE),
 
                   Glib::ParamSpec->enum
                   ('orientation',
-                   'orientation',
+                   'Orientation', # dgettext('gtk20-properties')
                    'Horizontal or vertical display and scrolling.',
                    'Gtk2::Orientation',
                    'horizontal',
@@ -306,8 +307,7 @@ sub SET_PROPERTY {
   my ($self, $pspec, $newval) = @_;
   my $pname = $pspec->get_name;
   my $oldval = $self->{$pname};
-  if (DEBUG) { print "$self set $pname  ",
-                 (defined $newval ? $newval : '[undef]'), "\n"; }
+  ### SET_PROPERTY: $pname, $newval
 
   if ($pname eq 'orientation') {
     $oldval = $self->{'vertical'};
@@ -324,8 +324,7 @@ sub SET_PROPERTY {
       my $model = $newval;
       $self->{'model_empty'} = ! ($model && $model->get_iter_first);
       $self->{'model_ids'} = $model && do {
-        my $weak_self = $self;
-        Scalar::Util::weaken ($weak_self);
+        Scalar::Util::weaken (my $weak_self = $self);
         my $ref_weak_self = \$weak_self;
 
         require Glib::Ex::SignalIds;
@@ -353,7 +352,7 @@ sub SET_PROPERTY {
   #
   if ($pname eq 'model'
       || ($pname eq 'orientation' && $oldval != $newval)) {
-    if (DEBUG) { print "  model or orientation change\n"; }
+    ### model or orientation change
     %{$self->{'row_widths'}} = ();
     $self->queue_resize;
     _pixmap_queue_draw ($self); # zap pixmap contents
@@ -382,7 +381,7 @@ sub SET_PROPERTY {
 # 'size-request' class closure
 sub _do_size_request {
   my ($self, $req) = @_;
-  if (DEBUG) { print "TickerView size_request\n"; }
+  ### TickerView _do_size_request()
 
   $req->width (0);
   $req->height (0);
@@ -402,7 +401,7 @@ sub _do_size_request {
                         ($cell->get_size($self,undef))[$sizefield]);
     }
     if ($self->{'fixed_height_mode'}) {
-      if (DEBUG) { print "  one row only for fixed-height-mode\n"; }
+      ### one row only for fixed-height-mode
       last;
     }
   }
@@ -412,7 +411,7 @@ sub _do_size_request {
   } else {
     $req->width ($want_size);
   }
-  if (DEBUG) { print "  decide size ",$req->width,"x",$req->height,"\n"; }
+  ### decide size: $req->width."x".$req->height
 }
 
 # 'size_allocate' class closure
@@ -429,7 +428,7 @@ sub _do_size_request {
 #
 sub _do_size_allocate {
   my ($self, $alloc) = @_;
-  if (DEBUG) { print "TickerView size_allocate\n"; }
+  ### TickerView _do_size_allocate()
 
   $self->signal_chain_from_overridden ($alloc);
 
@@ -437,7 +436,7 @@ sub _do_size_allocate {
     my ($want_width, $want_height) = _pixmap_desired_size ($self, $alloc);
     my ($got_width, $got_height) = $pixmap->get_size;
     if ($want_width != $got_width || $want_height != $got_height) {
-      if (DEBUG) { print "  want new pixmap size\n"; }
+      ### want new pixmap size
       $self->{'pixmap'} = undef;
       _pixmap_queue_draw ($self);
       return;
@@ -701,7 +700,7 @@ sub _pixmap_extend {
 
   my $model = $self->{'model'};
   if (! $model) {
-    if (DEBUG) { print "    no model set\n"; }
+    ### no model set
   EMPTY:
     $self->{'pixmap_end_x'} = $pixmap_size;
     return;
@@ -711,7 +710,7 @@ sub _pixmap_extend {
   my @cellinfo_list = ($self->_cellinfo_starts,
                        reverse $self->_cellinfo_ends);
   if (! @cellinfo_list) {
-    if (DEBUG) { print "    no cell renderers to draw with\n"; }
+    ### no cell renderers to draw with
     goto EMPTY;
   }
 
@@ -736,7 +735,7 @@ sub _pixmap_extend {
       $index = 0;
       $iter = $model->get_iter_first;
       if (! $iter) {
-        if (DEBUG) { print "    model has no rows\n"; }
+        ### model has no rows
         $x = $pixmap_size;
         last;
       }
@@ -773,7 +772,7 @@ sub _pixmap_extend {
                         " width $row_size\n"; }
 
     if ($all_zeros->($index, $row_size)) {
-      if (DEBUG) { print "    all cell widths on all rows are zero\n"; }
+      ### all cell widths on all rows are zero
       $self->{'want_x'} = 0;
       $x = $pixmap_size;
       last;
@@ -785,8 +784,7 @@ sub _pixmap_extend {
   }
 
   $self->{'pixmap_end_x'} = min ($x, $pixmap_size);
-  if (DEBUG >= 2) {
-    print "  extended to pixmap_end_x=$self->{'pixmap_end_x'}\n"; }
+  ### extended to pixmap_end_x: $self->{'pixmap_end_x'}
 }
 
 # _pixmap() returns 'pixmap', creating it if it doesn't already exist.
@@ -814,10 +812,10 @@ sub _pixmap_extend {
 sub _pixmap {
   my ($self) = @_;
   return ($self->{'pixmap'} ||= do {
-    if (DEBUG) { print "_pixmap() create\n"; }
+    ### _pixmap() create
     my ($pixmap_width, $pixmap_height)
       = _pixmap_desired_size ($self, $self->allocation);
-    if (DEBUG) { print "  create size ${pixmap_width}x${pixmap_height}\n"; }
+    ### create size: "${pixmap_width}x${pixmap_height}"
     Gtk2::Gdk::Pixmap->new ($self->window, $pixmap_width, $pixmap_height, -1);
   });
 }
@@ -825,26 +823,24 @@ use constant _PIXMAP_ALLOCATION_FACTOR => 1.5;
 use constant _SCREEN_SIZE_FACTOR => 0.5;
 sub _pixmap_desired_size {
   my ($self, $alloc) = @_;
-  if (DEBUG) { print "  _pixmap_desired_size\n"; }
+  ### _pixmap_desired_size()
   my @pixmap_dims = ($alloc->width, $alloc->height);
   my $i = $self->{'vertical'}; # width for horiz, height for vert
-  my $screen = $self->get_screen;
+  my $screen = $self->get_screen; # gtk 2.4 for celllayout, so have 2.2 screen
   my @screen_dims = ($screen->get_width, $screen->get_height);
 
-  if (DEBUG) { print "    max alloc*",_PIXMAP_ALLOCATION_FACTOR,
-                 " = ", $pixmap_dims[$i] * _PIXMAP_ALLOCATION_FACTOR,
-                   ", screen*", _SCREEN_SIZE_FACTOR,
-                     " = ", $screen_dims[$i] * _SCREEN_SIZE_FACTOR,"\n"; }
+  ### max: "alloc*"._PIXMAP_ALLOCATION_FACTOR." = ".($pixmap_dims[$i] * _PIXMAP_ALLOCATION_FACTOR)
+  ### max: "screen*"._SCREEN_SIZE_FACTOR." = ".($screen_dims[$i] * _SCREEN_SIZE_FACTOR)
   $pixmap_dims[$i] = $self->{'pixmap_size'}
     = int (max ($pixmap_dims[$i] * _PIXMAP_ALLOCATION_FACTOR,
                 $screen_dims[$i] * _SCREEN_SIZE_FACTOR));
-  if (DEBUG) { print "    desire $pixmap_dims[0]x$pixmap_dims[1]\n"; }
+  ### desire: "$pixmap_dims[0]x$pixmap_dims[1]"
   return @pixmap_dims;
 }
 
 sub _pixmap_queue_draw {
   my ($self) = @_;
-  if (DEBUG) { print "  _pixmap_queue_draw\n"; }
+  ### _pixmap_queue_draw()
   # zap 'drawn_array' to save work in _apply_remap
   $self->{'pixmap_redraw'} = 1;
   @{$self->{'drawn_array'}} = ();
@@ -876,7 +872,7 @@ sub _normalize {
     # width, then we keep it going for further rows.  If _row_width()
     # operates out of its cache then there's no iter.
     #
-    if (DEBUG >= 2) { print "  forward from $index,$x\n"; }
+    ### forward from: "$index,$x"
     my $iter;
 
     for (;;) {
@@ -885,7 +881,7 @@ sub _normalize {
         last;
       }
       if ($all_zeros->($index, $row_width)) {
-        if (DEBUG) { print "$self all cell widths on all rows are zero\n"; }
+        ### all cell widths on all rows are zero
         return (undef, $_[2]);  # with original $index
       }
       $x += $row_width;
@@ -910,7 +906,7 @@ sub _normalize {
     # cached.  For a user scroll back just a short distance the previous row
     # is probably already cached (and even probably in the pixmap).
     #
-    if (DEBUG) { print "  backward from $x,$index\n"; }
+    ### backward from: "$x,$index"
 
     while ($x > 0) {
       $index--;
@@ -919,13 +915,13 @@ sub _normalize {
       }
       my $row_width = _row_width ($self, $index);
       if ($all_zeros->($index, $row_width)) {
-        if (DEBUG) { print "$self all cell widths on all rows are zero\n"; }
+        ### all cell widths on all rows are zero
         return (undef, $_[2]);  # with original $index
       }
       $x -= $row_width;
     }
   }
-  if (DEBUG >= 2) { print "  now at $index,$x\n"; }
+  #### now at "$index,$x"
   return ($x, $index);
 }
 
@@ -959,7 +955,7 @@ sub _row_width {
     if (! $cell->get('visible')) { next; }
     $row_width += ($cell->get_size ($self,undef)) [$sizefield];
   }
-  if (DEBUG) { print "  calc row width $index is $row_width\n"; }
+  ### _row_width() calc: "$index is $row_width"
   return ($row_widths->{$index} = $row_width);
 }
 
@@ -978,7 +974,7 @@ sub scroll_pixels {
 
 sub _scroll_to_pos {
   my ($self, $x, $index) = @_;
-  if (DEBUG >= 2) { print "_scroll_to_pos x=$x index=$index\n"; }
+  #### _scroll_to_pos(): "x=$x index=$index"
 
   $self->{'want_index'} = $index;
   $self->{'want_x'} = $x;
@@ -999,7 +995,7 @@ sub _scroll_to_pos {
 sub _sync_call_handler {
   my ($ref_weak_self) = @_;
   my $self = $$ref_weak_self || return;
-  if (DEBUG >= 2) { print "TickerView _sync_call_handler\n"; }
+  #### TickerView _sync_call_handler()
 
   $self->{'sync_call'} = undef;
 
@@ -1026,10 +1022,11 @@ sub _do_direction_changed {
   my ($self, $prev_dir) = @_;
   _pixmap_queue_draw ($self);
 
-  # As of Gtk 2.12 the GtkWidget code in gtk_widget_direction_changed() does
-  # a queue_resize, which is neither needed or wanted here.  But a direction
-  # change should be infrequent and better make sure anything GtkWidget does
-  # in the future gets run.
+  # As of Gtk 2.18 the GtkWidget code in gtk_widget_real_direction_changed()
+  # (previously called gtk_widget_direction_changed()) does a queue_resize(),
+  # which is neither needed or wanted here.  But a direction change should
+  # be infrequent and better make sure anything GtkWidget does in the future
+  # gets run.
   $self->signal_chain_from_overridden ($prev_dir);
 }
 
@@ -1040,12 +1037,12 @@ sub _do_direction_changed {
 sub _do_notify {
   my ($self, $pspec) = @_;
   my $pname = $pspec->get_name;
-  if (DEBUG) { print "TickerView notify '$pname'\n"; }
+  ### TickerView _do_notify(): $pname
 
   if ($pname eq 'sensitive') {
     # gtk_widget_set_sensitive does $self->queue_draw, so just need to
     # invalidate pixmap contents here for a redraw
-    if (DEBUG) { print "  redraw\n"; }
+    ### redraw
     _pixmap_queue_draw ($self);
   }
   $self->signal_chain_from_overridden ($pspec);
@@ -1109,7 +1106,7 @@ sub _gettime {
   return Time::HiRes::clock_gettime (Time::HiRes::CLOCK_REALTIME());
 }
 unless (eval { _gettime(); 1 }) {
-  if (DEBUG) { print "TickerView fallback to Time::HiRes::time() due to clock_gettime() error: $@"; }
+  ### TickerView fallback to Time HiRes time() due to clock_gettime() error: $@
   no warnings;
   *_gettime = \&Time::HiRes::time;
 }
@@ -1188,7 +1185,7 @@ sub _do_timer {
 #
 sub _do_map_or_unmap {
   my ($self) = @_;
-  if (DEBUG) { print "TickerView _do_map_or_unmap\n"; }
+  ### TickerView _do_map_or_unmap()
 
   # chain before _update_timer(), so the GtkWidget code sets or unsets the
   # mapped flag which _update_timer() will look at
@@ -1205,7 +1202,7 @@ sub _do_map_or_unmap {
 #
 sub _do_unrealize {
   my ($self) = @_;
-  if (DEBUG) { print "TickerView _do_unrealize\n"; }
+  ### TickerView _do_unrealize()
 
   # chain before _update_timer(), so the GtkWidget code clears the mapped flag
   $self->signal_chain_from_overridden;
@@ -1218,8 +1215,7 @@ sub _do_unrealize {
 # 'visibility_notify_event' class closure
 sub _do_visibility_notify_event {
   my ($self, $event) = @_;
-  if (DEBUG) { print "TickerView _do_visibility_notify_event ",
-                 $event->state,"\n"; }
+  ### TickerView _do_visibility_notify_event(): $event->state
   $self->{'visibility_state'} = $event->state;
   _update_timer ($self);
   return $self->signal_chain_from_overridden ($event);
@@ -1289,7 +1285,7 @@ sub is_drag_active {
 # 'button_press_event' class closure, getting Gtk2::Gdk::Event::Button
 sub _do_button_press_event {
   my ($self, $event) = @_;
-  if (DEBUG >= 2) { print "TickerView button_press ",$event->button,"\n"; }
+  #### TickerView button_press: $event->button
   if ($event->button == 1) {
     $self->{'drag_xy'} = [ $event->root_coords ];
     _update_timer ($self); # stop timer
@@ -1306,7 +1302,7 @@ sub _do_button_press_event {
 #
 sub _do_motion_notify_event {
   my ($self, $event) = @_;
-  if (DEBUG >= 2) { print "TickerView _do_motion_notify_event\n"; }
+  #### TickerView _do_motion_notify_event()
   if (defined $self->{'drag_xy'}) { # ignore motion/drags of other buttons
     _drag_scroll ($self, $event);
   }
@@ -1317,7 +1313,7 @@ sub _do_motion_notify_event {
 #
 sub _do_button_release_event {
   my ($self, $event) = @_;
-  if (DEBUG >= 2) { print "TickerView button_release ",$event->button,"\n"; }
+  #### TickerView _do_button_release_event(): $event->button
 
   if (defined $self->{'drag_xy'} && $event->button == 1) {
     _drag_scroll ($self, $event); # final dragged position from this event
@@ -1349,11 +1345,40 @@ sub _drag_scroll {
 }
 
 #------------------------------------------------------------------------------
+# mouse wheel scroll
+
+my %direction_sign = (up => -1,
+                      down => 1,
+                      left => -1,
+                      right => 1);
+my %direction_is_vertical = (up => 1,
+                             down => 1,
+                             left => 0,
+                             right => 0);
+# 'scroll-event' class closure, getting Gtk2::Gdk::Event::Scroll
+sub _do_scroll_event {
+  my ($self, $event) = @_;
+  #### TickerView scroll-event: $event->direction
+  my $dir = $event->direction;
+  my $vertical = $self->{'vertical'};
+
+  # width when horiz, height when vert
+  my $step = ($self->allocation->values)[2 + $vertical]
+    * ($event->state & 'control-mask' ? 0.9 : 0.1)
+      * $direction_sign{$dir};
+  unless ($direction_is_vertical{$dir} ^ $vertical) {
+    if ($self->get_direction eq 'rtl') { $step = - $step; }
+  }
+  $self->scroll_pixels ($step);
+  return $self->signal_chain_from_overridden ($event);
+}
+
+#------------------------------------------------------------------------------
 # renderer changes
 
 sub _cellinfo_list_changed {
   my ($self) = @_;
-    if (DEBUG) { print "TickerView _cellinfo_list_changed\n"; }
+  ### TickerView _cellinfo_list_changed()
   %{$self->{'row_widths'}} = ();
   _pixmap_queue_draw ($self);
   _update_timer ($self);    # possible newly empty or non-empty cellinfo list
@@ -1362,7 +1387,7 @@ sub _cellinfo_list_changed {
 
 sub _cellinfo_attributes_changed {
   my ($self) = @_;
-  if (DEBUG) { print "TickerView _cellinfo_attributes_changed\n"; }
+  ### TickerView _cellinfo_attributes_changed()
   %{$self->{'row_widths'}} = ();
   _pixmap_queue_draw ($self);
   $self->SUPER::_cellinfo_attributes_changed;
@@ -1386,8 +1411,7 @@ sub _cellinfo_attributes_changed {
 sub _do_row_changed {
   my ($model, $path, $iter, $ref_weak_self) = @_;
   my $self = $$ref_weak_self || return;
-  if (DEBUG) { print "_do_row_changed path=",
-                 $path->to_string,"\n"; }
+  ### _do_row_changed() path: $path->to_string
   $path->get_depth == 1 || return;  # only top rows of the model
   my ($index) = $path->get_indices;
 
@@ -1416,8 +1440,7 @@ sub _do_row_changed {
 sub _do_row_inserted {
   my ($model, $path, $iter, $ref_weak_self) = @_;
   my $self = $$ref_weak_self || return;
-  if (DEBUG) { print "_do_row_inserted path=",
-                 $path->to_string,"\n"; }
+  ### _do_row_inserted() path: $path->to_string
   $path->get_depth == 1 || return;  # only top rows
   my ($index) = $path->get_indices;
 
@@ -1443,8 +1466,7 @@ sub _do_row_inserted {
 sub _do_row_deleted {
   my ($model, $path, $ref_weak_self) = @_;
   my $self = $$ref_weak_self || return;
-  if (DEBUG) { print "_do_row_deleted path=",
-                 $path->to_string,"\n"; }
+  ### _do_row_deleted() path: $path->to_string
   $path->get_depth == 1 || return;  # only top rows
   my ($index) = $path->get_indices;
 
@@ -1478,7 +1500,7 @@ sub _do_row_deleted {
 sub _do_rows_reordered {
   my ($model, $reordered_path, $reordered_iter, $aref, $ref_weak_self) = @_;
   my $self = $$ref_weak_self || return;
-  if (DEBUG) { print "_do_rows_reordered\n"; }
+  ### _do_rows_reordered()
   if (defined $reordered_iter) { return; }   # top rows only
 
   # $oldpos == $aref->[$newpos], ie. aref says where the row used to be.
@@ -1532,7 +1554,7 @@ sub _pixmap_queue_draw_if_index {
 # empty at this point if it's going to be redrawn
 sub _apply_remap {
   my ($self, $remap) = @_;
-  if (DEBUG) { print "  _apply_remap $remap\n"; }
+  ### _apply_remap(): $remap
 
   if (defined (my $want_index = $self->{'want_index'})) {
     if (DEBUG) { print "  want_index $want_index to ",
@@ -1591,7 +1613,7 @@ sub _make_all_zeros_proc {
 
 sub get_path_at_pos {
   my ($self, $x, $y) = @_;
-  if (DEBUG) { print "get_path_at_pos($x,$y)\n"; }
+  ### get_path_at_pos(): "$x,$y"
 
   # Go from the want_x/want_index desired position, even if the drawing
   # isn't yet actually displaying that.  This makes most sense after a
@@ -1644,7 +1666,7 @@ The interfaces implemented are:
     Gtk2::CellLayout
 
 The C<orientation> property is compatible with the Gtk2::Orientable
-interface, but that interface can't be added as of Perl-Gtk 1.221.
+interface, but that interface can't be added as of Perl-Gtk 1.222.
 
 =head1 DESCRIPTION
 
@@ -1671,10 +1693,26 @@ Items are drawn with one or more C<Gtk2::CellRenderer> objects set into the
 TickerView as per the CellLayout interface (see L<Gtk2::CellLayout>).  For
 example to scroll text you can use C<Gtk2::CellRendererText> as a renderer.
 
+=head2 Dragging
+
+Mouse button 1 is setup for the user to drag the display back and forwards.
+This is good to go back and see something that's just moved off the edge, or
+to skip past boring bits.  Perhaps in the future the button used will be
+customizable.
+
+Mouse wheel scrolling moves the display back and forwards by 10% of the
+window, or a page 90% if the control key is held down.  An up/down scroll
+will act on a horizontal ticker too, advancing or reversing, which is handy
+for a mouse with only an up/down wheel.  Similarly a left/right scroll on a
+vertical ticker.  But this is a bit experimental and might change or become
+customizable.
+
+=head2 Layout
+
 If two or more renderers are set then they're drawn one after the other for
 each item, ie. row of the model.  For example you could have a
 C<Gtk2::CellRendererPixbuf> to draw an icon then a C<Gtk2::CellRendererText>
-to draw some text and they scroll across together (or upwards on top of each
+to draw some text and they scroll across together (or upwards above each
 other when vertical).  The icon could use the row data, or just be a fixed
 image to go before every item.
 
@@ -1687,8 +1725,8 @@ image to go before every item.
 
 The display and scrolling direction follow the left-to-right or
 right-to-left of C<set_direction> (see L<Gtk2::Widget>).  For C<ltr> mode
-item 0 starts at the left of the window and items scroll to the left.  For
-C<rtl> item 0 starts at the right of the window and items scroll to the
+item 0 starts at the left of the window and items scroll off to the left.
+For C<rtl> item 0 starts at the right of the window and items scroll to the
 right.
 
     +----------------------------------------------------------+
@@ -1705,8 +1743,9 @@ Within each renderer cell any text or drawing direction is a matter for that
 renderer.  For example in C<Gtk2::CellRendererText> Pango recognises
 right-to-left scripts such as Arabic based on the characters and shouldn't
 need any special setups.  (But if you want to rotate 90 degrees for
-something vertical it might be much trickier -- just setting text "gravity"
-doesn't work.)
+something vertical it might be much trickier.  Just setting text "gravity"
+doesn't work.  See F<examples/vertical-rottext.pl> in the TickerView sources
+for one way to do it.)
 
 Currently only a list style model is expected, meaning only a single level,
 and only that topmost level of the model is drawn.  For example a
@@ -1810,7 +1849,7 @@ all and resizing on every insert, delete or change.  If the model is big
 this is a significant speedup.
 
 If you force a height with C<set_size_request> in the usual widget fashion
-then you should turn on C<fixed-height-mode> too because under
+then you should turn on C<fixed-height-mode> too because even with
 C<set_size_request> the sizing mechanism ends up running the widget size
 code even though it then overrides the result.
 
@@ -1818,22 +1857,22 @@ code even though it then overrides the result.
 
 The C<visible> property in each cell renderer is recognised and a renderer
 that's not visible is skipped and takes no space.  C<visible> can be set
-globally in the renderer to suppress it entirely, or controlled with the
-attributes mechanism or data setup function to suppress it just for selected
-rows from the model.
+permanently in the renderer to suppress it entirely, or controlled with the
+attributes mechanism or data setup function to suppress have it just for
+selected rows of the model.
 
-(Suppressing lots of rows using C<visible> might be a bit slow since
-TickerView basically must setup the renderers for each row to see the state.
+Suppressing lots of rows using C<visible> might be a bit slow since
+TickerView must setup the renderers for each row to see the state.
 A C<Gtk2::TreeModelFilter> may be a better way to pick out a small number of
-desired rows from a very big model.)
+desired rows from a very big model.
 
 =head1 BUILDABLE
 
-C<Gtk2::Ex::TickerView> implements the C<Gtk2::Buildable> interface of Gtk
-2.12 and up, allowing C<Gtk2::Builder> to construct a TickerView.  The class
-name is C<Gtk2__Ex__TickerView> and renderers and attributes are added as
-children per C<Gtk2::CellLayout>.  Here's a sample, or see
-F<examples/builder.pl> in the TickerView sources for a complete program,
+TickerView implements the C<Gtk2::Buildable> interface of Gtk 2.12 and up,
+allowing C<Gtk2::Builder> to construct a ticker.  The class name is
+C<Gtk2__Ex__TickerView> and renderers and attributes are added as children
+per C<Gtk2::CellLayout>.  Here's a sample, or see F<examples/builder.pl> in
+the TickerView sources for a complete program,
 
     <object class="Gtk2__Ex__TickerView" id="myticker">
       <property name="model">myliststore</property>
@@ -1849,14 +1888,9 @@ F<examples/builder.pl> in the TickerView sources for a complete program,
 
 But see L<Gtk2::Ex::CellLayout::Base/BUILDABLE INTERFACE> for caveats about
 widget superclass tags (like the "accessibility" settings) which end up
-unavailable (as of Gtk2-Perl 1.221 at least).
+unavailable (as of Gtk2-Perl 1.222 at least).
 
 =head1 OTHER NOTES
-
-Mouse button 1 is setup for the user to drag the display back and forwards.
-This is good to go back and see something that's just moved off the edge, or
-to skip past boring bits.  Perhaps in the future the button used will be
-customizable.
 
 The Gtk reference documentation for C<GtkCellLayout> doesn't really describe
 how C<pack_start> and C<pack_end> order the cells, but it's the same as
@@ -1869,12 +1903,12 @@ F<examples/order.pl> in the sources for a demonstration.
 
 When the model has no rows the TickerView's desired height from
 C<size_request> is zero.  This is bad if you want a visible but blank area
-when there's nothing to display.  However there's no way TickerView can work
-out a height when it's got no data at all to set into the renderers.  You
-can try calculating a fixed height from a sample model and
-C<set_size_request> to force that, or alternately have a "no data" row
-displaying in the model instead of letting it go empty, or even switch to a
-dummy model with a "no data" row when the real one is empty.
+when there's nothing to display.  But there's no way TickerView can work out
+a height when it's got no data at all to set into the renderers.  You can
+try calculating a fixed height from a sample model and C<set_size_request>
+to force that, or alternately have a "no data" row displaying in the model
+instead of letting it go empty, or even switch to a dummy model with a "no
+data" row when the real one is empty.
 
 =head2 Drawing
 
@@ -1882,7 +1916,8 @@ Cells are drawn into an off-screen pixmap which is copied to the window at
 successively advancing X positions as the ticker scrolls across.  The aim is
 to run the model fetching and cell rendering just once for each row as it
 appears on screen.  This is important because the model+renderer mechanism
-is generally much too slow to call frame-rate times per second.
+is generally much too slow and bloated to call at frame-rate times per
+second.
 
 The drawing for scroll movement goes through a SyncCall (see
 L<Gtk2::Ex::SyncCall>) so that after drawing one frame the next doesn't go
@@ -1892,11 +1927,11 @@ can keep up with, but instead dynamically caps at client+server capability.
 
 Scroll movements are calculated from elapsed time using
 C<clock_gettime(CLOCK_REALTIME)> when available or high-res system time
-otherwise (see C<Time::HiRes>).  This means the C<speed> setting is followed
-even if drawing doesn't keep up with the requested C<frame-rate>.  Slow
-frame rates can occur on the client side if the main loop is busy doing
-other things (including temporarily blocked completely), or can be on the X
-server side if it's busy with other drawing etc.
+otherwise (see C<Time::HiRes>).  This means the display moves at the
+C<speed> setting even if drawing is not keeping up with the requested
+C<frame-rate>.  Slow frame rates can occur on the client side if the main
+loop is busy doing other things (or momentarily blocked completely), or can
+be on the X server side if it's busy with other drawing etc.
 
 =head1 SEE ALSO
 
@@ -1909,7 +1944,7 @@ L<http://user42.tuxfamily.org/gtk2-ex-tickerview/index.html>
 
 =head1 COPYRIGHT
 
-Copyright 2007, 2008, 2009 Kevin Ryde
+Copyright 2007, 2008, 2009, 2010 Kevin Ryde
 
 Gtk2-Ex-TickerView is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by the

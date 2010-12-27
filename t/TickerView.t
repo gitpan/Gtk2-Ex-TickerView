@@ -1,6 +1,6 @@
-#!/usr/bin/perl
+#!/usr/bin/perl -w
 
-# Copyright 2007, 2008, 2009 Kevin Ryde
+# Copyright 2007, 2008, 2009, 2010 Kevin Ryde
 
 # This file is part of Gtk2-Ex-TickerView.
 #
@@ -17,25 +17,19 @@
 # You should have received a copy of the GNU General Public License along
 # with Gtk2-Ex-TickerView.  If not, see <http://www.gnu.org/licenses/>.
 
+use 5.008;
 use strict;
 use warnings;
 use Gtk2::Ex::TickerView;
-use Test::More tests => 50;
+use Test::More tests => 49;
 
-use FindBin;
-use File::Spec;
-use lib File::Spec->catdir($FindBin::Bin,'inc');
+use lib 't';
 use MyTestHelpers;
-use Test::Weaken::Gtk2;
+BEGIN { MyTestHelpers::nowarnings() }
 
-SKIP: { eval 'use Test::NoWarnings; 1'
-          or skip 'Test::NoWarnings not available', 1; }
-
-my $want_version = 14;
-cmp_ok ($Gtk2::Ex::TickerView::VERSION, '>=', $want_version,
-        'VERSION variable');
-cmp_ok (Gtk2::Ex::TickerView->VERSION,  '>=', $want_version,
-        'VERSION class method');
+my $want_version = 15;
+is ($Gtk2::Ex::TickerView::VERSION, $want_version, 'VERSION variable');
+is (Gtk2::Ex::TickerView->VERSION,  $want_version, 'VERSION class method');
 { ok (eval { Gtk2::Ex::TickerView->VERSION($want_version); 1 },
       "VERSION class check $want_version");
   my $check_version = $want_version + 1000;
@@ -43,7 +37,7 @@ cmp_ok (Gtk2::Ex::TickerView->VERSION,  '>=', $want_version,
       "VERSION class check $check_version");
 }
 { my $ticker = Gtk2::Ex::TickerView->new;
-  cmp_ok ($ticker->VERSION, '>=', $want_version, 'VERSION object method');
+  is ($ticker->VERSION, $want_version, 'VERSION object method');
   ok (eval { $ticker->VERSION($want_version); 1 },
       "VERSION object check $want_version");
   my $check_version = $want_version + 1000;

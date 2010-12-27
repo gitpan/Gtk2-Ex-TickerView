@@ -1,5 +1,5 @@
 This file contains message digests of all files listed in MANIFEST,
-signed via the Module::Signature module, version 0.61.
+signed via the Module::Signature module, version 0.66.
 
 To verify the content in this distribution, first make sure you have
 Module::Signature installed, then type:
@@ -15,53 +15,55 @@ not run its Makefile.PL or Build.PL.
 Hash: SHA1
 
 SHA1 842745cb706f8f2126506f544492f7a80dbe29b3 COPYING
-SHA1 856f8a7c3e4d6fecf27b35d28c4775a3132d326e Changes
-SHA1 aca350d5ef71b11832302db3db11e8508ae82d35 MANIFEST
-SHA1 bb78fa7bf2dfebdda59c9efb64db51b173fb9e2f MANIFEST.SKIP
-SHA1 7949de08e8c9006ae258b6f24f21f1034167a7da META.yml
-SHA1 612f85f7e181f21a74930443ac7b5e8cfbc250cd Makefile.PL
+SHA1 7772303d42cb305452948ecf11f1080d3773df43 Changes
+SHA1 05706763728e5f6c8f2f08344d4baded3f9dbf28 MANIFEST
+SHA1 e6e7c2904ea5d300c0ddf70fc5a80f5005229aa9 MANIFEST.SKIP
+SHA1 5a36df1e464504c772834e090ba9058e8e916d96 META.yml
+SHA1 67ebdca30d76dc4f6dce3334551ed1bc9ec07434 Makefile.PL
 SHA1 3e3c601a54f8f3fb57a1d69ef692a9f977e15b85 README
-SHA1 20d1e556caf96f15ad786b799a96c456b097da2b debian/changelog
+SHA1 b34f535929ee9403689df17125db139b53201c32 debian/changelog
 SHA1 ac3478d69a3c81fa62e60f5c3696165a4e5e6ac4 debian/compat
-SHA1 aea64b75ed6959b8971172b4eabb6eff4b8b923a debian/control
-SHA1 0aaec44e71d2d001e20b5f08e4300c6ac65d1932 debian/copyright
-SHA1 2bfbe5d3ea340755b78b162572141eda8d474444 debian/patches/pod-examples-dir.diff
+SHA1 69076eab94dc9845b1d3899080a4960ffa7427e2 debian/control
+SHA1 1c91f2e47fbb0dbd594c33375ff9889ef1f7551b debian/copyright
+SHA1 99a81fdc21691535dc2a98271015b88c8e2de700 debian/patches/pod-examples-dir.diff
 SHA1 8038e74813b8dd23df6433cac4c144e4ba39f57f debian/rules
+SHA1 61652cd1568dcf2614df833eba241755eee34e89 debian/source/format
 SHA1 26b99e374b7801d6e59bae6ad141af149ea3cbb7 debian/watch
-SHA1 d066cb2016ff35da90e049b6b4f2cba4acdee1ab devel/Pause.pm
-SHA1 1449ff40917ba9a74e89af73f187b2434b7bb541 devel/buildable.pl
-SHA1 9af00e8470819bad347fb50fc8f91794aa73e64a devel/clock-gettime.pl
-SHA1 7b6af02b60dbcace7d3823def626d609cc968daa devel/display.t
-SHA1 6940937123b46fc6581fbf06ee88da588086f3b5 devel/refilter.pl
-SHA1 c5163bda373c355c4e2b6a47295e7e5f821d37c4 devel/run.pl
-SHA1 740991c86398fde1c7bc5af47a3c3acf62c10d38 devel/window-move.pl
-SHA1 827688aa82b2ecbb4307bc3eddfa30079eacc988 examples/builder.pl
-SHA1 f2bd55d9c19fbe645cd7097bda37749b9c7a6082 examples/financequote.pl
-SHA1 1f7a712d30e26b07daf092d608a03a1646d8ec55 examples/news.pl
-SHA1 ccdf373665eb792e119ce05842757aa5f2ea335c examples/order.pl
-SHA1 299ea7c6099f150152628483817df9d5bfbd57fb examples/poe-yahoo-quotes.pl
-SHA1 b064e6d6c9ad0aa7fcbaaa52d6a609029ef29d9e examples/rottext-vertical.pl
-SHA1 cb8199b0b27283b0cb8a924cb1478e05b12f5cb0 examples/simple.pl
-SHA1 82f14a8efcaa0ec9b48d28977c27636b95663478 examples/vertical.pl
-SHA1 b70409e3868693781f7667ae90f75a183b1e421e examples/wrap-width.pl
-SHA1 d3fbfce26c102ec67851cf8406aa06d1ea11063e inc/MyMakeMakerExtras.pm
-SHA1 8e7135d2f4d47aa887d445680ae286400639f7b6 inc/my_pod2html
-SHA1 d35e99c18aad6485b8e1f7c151c92aa9e2d45814 lib/Gtk2/Ex/TickerView.pm
-SHA1 378b932305fb60823467c2af3c771fe3fc295a13 t/0-META-read.t
-SHA1 a343ed4dce96d05de51eed1ec065911584b96fce t/0-Test-DistManifest.t
-SHA1 bba0dc087cbe64d8f100ab77e6cef061c0bebf27 t/0-Test-Pod.t
-SHA1 5fa94e1e88e44064d1e6b21c88a4c9374a17bfd1 t/0-Test-Synopsis.t
-SHA1 d369522d8a9a887fdf1a1e14cb83e25fa2188727 t/0-Test-YAML-Meta.t
-SHA1 9df4120f2958556cd810905bfb68868b7e004b9a t/TickerView.t
-SHA1 58b75d7190f60d98c36f0150c5cf5a22fd9cd173 t/buildable.t
-SHA1 f1effdaf8e1b594668490ce2d0e3375ac45443cc t/inc/MyTestHelpers.pm
-SHA1 654e5f136e3481f25fa0507a7cb60ec6bc5b18d9 t/inc/Test/Weaken/ExtraBits.pm
-SHA1 6aad0e60f2a7061d19062d5f0ec3777513bf6e59 t/inc/Test/Weaken/Gtk2.pm
-SHA1 78ae84d32e7f9e2de77ae3722656d495821716a5 t/test-weaken.t
+SHA1 b37183c3414f09a6a4d309ab0feb463227e5e323 devel/Pause-backup.pm
+SHA1 66ef4f91fda0a9eb6a5998657010e3fde0361fa3 devel/StopForMenu.pm
+SHA1 22abc584a240a0b9b739e887306e8d7464b9ac5f devel/Stopper.pm
+SHA1 0608baf2cf49f2cf5490cdb582338359c4adac59 devel/buildable.pl
+SHA1 aa9747f765b8b06898b9fc25dd25d1bb829e8484 devel/clock-gettime.pl
+SHA1 38120643445b6f51b62130acffd44eac37b13b7c devel/display.t
+SHA1 b28704439eaee724d0e545598a99e295db99d896 devel/refilter.pl
+SHA1 95ad35391301315ad68e82fadd24510c3c843e1d devel/run.pl
+SHA1 786b7b60670350d2e891eb904a50f819709e70bf devel/window-move.pl
+SHA1 9b20da300ff48f6784cfd7a63342aed4da92c1ad examples/builder.pl
+SHA1 e77c780dd30dda71ed41d11e34107c2b4a95f3d6 examples/financequote.pl
+SHA1 9ccc45e1fc3e3f23e68948f2119578124e8c2633 examples/news.pl
+SHA1 2aefce1e3530993fe88063a87d50ef45c5aad650 examples/order.pl
+SHA1 75704bc9e622165a9904d756d3c19f954490f1af examples/poe-yahoo-quotes.pl
+SHA1 7b2e9c6c335b7e6e47b4aa031779f7ca381c4695 examples/simple.pl
+SHA1 88a0bd1c6ab0ed93cf49f1d9d39196f444b8ea9f examples/vertical-rottext.pl
+SHA1 3a11ff215938f89a662d00c269a09aff2c66fbb7 examples/vertical.pl
+SHA1 d8b634a08fc8606e43c279e5a53370c10e984984 examples/wrap-width.pl
+SHA1 4fb53efe76b3b2264eaa4cf7780cb0c4923e18a5 inc/MyMakeMakerExtras.pm
+SHA1 692a1ddc2ca6b98cac7b48ea40bc1ac1509e8ed9 inc/my_pod2html
+SHA1 dedf5552bfb1b92325ab22b96b4516ceaeb0646e lib/Gtk2/Ex/TickerView.pm
+SHA1 d2f58e66e0965c50aefc0479cd5712e8df53336e t/MyTestHelpers.pm
+SHA1 06b321c36977d841dedc60d0e4afb7d59ce1bd6f t/Test/Weaken/ExtraBits.pm
+SHA1 a932fa238f60b3ec2dd744a23d03499ec9e5df08 t/TickerView.t
+SHA1 3a0c36bbcdae616e449c23625a234b1baecb2458 t/buildable.t
+SHA1 29c671858c90e69e2e402c55f74d4640b90a7b8c t/test-weaken.t
+SHA1 9127f78a0dfa04976acbb979dd7862ef59a74c58 xt/0-META-read.t
+SHA1 37abd43b41068804ea4bb099fdd89af21be82926 xt/0-Test-DistManifest.t
+SHA1 8f93fb4c8f0424a4442cc93c9a2e86342ef55281 xt/0-Test-Pod.t
+SHA1 1de8f07883f6bf1a2ef79f2cb8adf1deb3f61cee xt/0-Test-Synopsis.t
+SHA1 fb517c2fae5ddac559318bf6a224949115ea3129 xt/0-Test-YAML-Meta.t
 -----BEGIN PGP SIGNATURE-----
 Version: GnuPG v1.4.10 (GNU/Linux)
 
-iD8DBQFLLyl+LFMCIV9q3ToRAnb9AJ9TNml9biDnlfALKy/VUtV5SJWpCACfQ0PZ
-M8j6ozvGCfqfMCs11NoJs2U=
-=kCrO
+iD8DBQFNGRnXLFMCIV9q3ToRAjk1AJ4i0C6ot2xWBM1nFrC+nfnUjrWg6QCgnK7Q
+ZyEGGvSqm+AGX5b7/C27VxA=
+=51TY
 -----END PGP SIGNATURE-----

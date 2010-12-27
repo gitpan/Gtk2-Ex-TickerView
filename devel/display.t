@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# Copyright 2007, 2008, 2009 Kevin Ryde
+# Copyright 2007, 2008, 2009, 2010 Kevin Ryde
 
 # This file is part of Gtk2-Ex-TickerView.
 #
@@ -72,7 +72,7 @@ sub main_sync {
     $count++;
     Gtk2->main_iteration_do (0);
   }
-  diag "main_sync(): ran $count events/iterations\n";
+  diag "main_sync(): ran $count events/iterations";
 }
 
 sub wait_for_event {
@@ -98,7 +98,7 @@ sub wait_for_event {
     $count++;
     Gtk2->main_iteration_do (0);
   }
-  diag "wait_for_event('$signame'): ran $count events/iterations\n";
+  diag "wait_for_event('$signame'): ran $count events/iterations";
 
   $widget->signal_handler_disconnect ($sig_id);
   Glib::Source->remove ($timer_id);

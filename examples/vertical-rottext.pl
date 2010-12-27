@@ -1,6 +1,6 @@
-#!/usr/bin/perl
+#!/usr/bin/perl -w
 
-# Copyright 2008, 2009 Kevin Ryde
+# Copyright 2008, 2009, 2010 Kevin Ryde
 
 # This file is part of Gtk2-Ex-TickerView.
 #
@@ -18,7 +18,7 @@
 # with Gtk2-Ex-TickerView.  If not, see <http://www.gnu.org/licenses/>.
 
 
-# Usage: ./rottext-vertical.pl
+# Usage: ./vertical-rottext.pl
 #
 # This is vertical scrolling tickers with vertical rotated text.  The text
 # is done with a pango rotation matrix in a custom cell renderer.  Is there
